@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Comptes Communs</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <h1>Comptes Communs</h1>
+        </header>
+
+        <main id="swipe-view">
+            <div id="card-stack">
+                </div>
+            
+            <div class="controls">
+                <button id="btn-cancel" class="control-btn cancel" title="Terminer (Swipe Gauche)">
+                    <span class="icon">❌</span>
+                </button>
+                <button id="btn-edit" class="control-btn edit" title="Modifier le montant">
+                    <span class="icon">✏️</span>
+                </button>
+                <button id="btn-validate" class="control-btn validate" title="Valider (Swipe Droit)">
+                    <span class="icon">✅</span>
+                </button>
+            </div>
+        </main>
+
+        <main id="summary-view" class="hidden">
+            <h2>À provisionner ce mois-ci</h2>
+            <div id="total-amount">0,00 €</div>
+            
+            <div class="summary-details">
+                <h3>Dépenses validées :</h3>
+                <ul id="validated-list">
+                    </ul>
+            </div>
+
+            <button id="btn-finish" class="primary-btn">Terminer pour ce mois</button>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
