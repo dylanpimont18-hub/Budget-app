@@ -34,12 +34,7 @@ function updateHome() {
 document.getElementById('btn-start').addEventListener('click', () => {
     reviewSession = expenses.filter(e => e.status !== 'deleted');
     
-    if (reviewSession.length === 0) {
-        updateRecap();
-        showView('recap');
-        return;
-    }
-
+    // On lance la vue swipe dans tous les cas
     currentIndex = 0;
     renderCard();
     updateProgress();
@@ -56,13 +51,32 @@ const cardContainer = document.getElementById('card-container');
 let startX = 0, isDragging = false;
 
 function renderCard() {
+    const emptyCard = document.getElementById('empty-card');
+    const swipeGuides = document.querySelector('.swipe-guides');
+
+    // Vérifie si on a fini la session ou s'il n'y a rien
     if (currentIndex >= reviewSession.length) {
-        saveData();
-        updateRecap();
-        showView('recap');
-        return;
+        if (reviewSession.length === 0) {
+            // S'il n'y a vraiment aucune dépense, on affiche la carte vide
+            cardContainer.style.display = 'none';
+            swipeGuides.style.display = 'none';
+            emptyCard.style.display = 'flex';
+            document.getElementById('progress-text').textContent = "0 / 0";
+            return;
+        } else {
+            // S'il a fini de swiper des dépenses existantes, on va au récap
+            saveData();
+            updateRecap();
+            showView('recap');
+            return;
+        }
     }
     
+    // Affichage normal de la carte à swiper
+    cardContainer.style.display = 'flex';
+    emptyCard.style.display = 'none';
+    swipeGuides.style.display = 'flex';
+
     const expense = reviewSession[currentIndex];
     document.getElementById('card-icon').textContent = expense.icon;
     document.getElementById('card-name').textContent = expense.name;
@@ -74,7 +88,11 @@ function renderCard() {
 }
 
 function updateProgress() {
-    document.getElementById('progress-text').textContent = `${currentIndex + 1} / ${reviewSession.length}`;
+    if (reviewSession.length === 0) {
+        document.getElementById('progress-text').textContent = `0 / 0`;
+    } else {
+        document.getElementById('progress-text').textContent = `${currentIndex + 1} / ${reviewSession.length}`;
+    }
 }
 
 cardContainer.addEventListener('touchstart', (e) => {
@@ -194,7 +212,7 @@ function updateRecap() {
     });
 }
 
-// --- AJOUTER UNE NOUVELLE DÉPENSE ---
+// --- AJOUTER UNE NOUVELLE DÉPENSE (DEPUIS LE RÉCAP) ---
 document.getElementById('btn-add-expense').addEventListener('click', () => {
     const name = prompt("Nom de la nouvelle dépense :");
     if (!name || name.trim() === "") return; 
@@ -213,6 +231,31 @@ document.getElementById('btn-add-expense').addEventListener('click', () => {
     expenses.push(newExpense);
     saveData(); 
     updateRecap();
+});
+
+// --- AJOUTER UNE DÉPENSE DEPUIS L'ÉCRAN SWIPE (QUAND VIDE) ---
+document.getElementById('btn-add-swipe').addEventListener('click', () => {
+    const name = prompt("Nom de la nouvelle dépense :");
+    if (!name || name.trim() === "") return; 
+
+    const amountStr = prompt(`Montant pour ${name} (€) :`);
+    if (!amountStr || isNaN(amountStr) || amountStr.trim() === "") return; 
+
+    const newExpense = {
+        id: Date.now(), 
+        name: name.trim(),
+        amount: parseFloat(amountStr),
+        icon: "📝", 
+        status: "active"
+    };
+
+    expenses.push(newExpense);
+    saveData(); 
+    
+    // Mettre à jour la session en cours avec la nouvelle dépense et relancer l'affichage
+    reviewSession = expenses.filter(e => e.status !== 'deleted');
+    renderCard();
+    updateProgress();
 });
 
 // Initialisation au lancement
