@@ -1,3 +1,4 @@
+// --- JEU DE DONNÉES PAR DÉFAUT ---
 const defaultExpenses = [
     { id: 1, name: "Loyer", amount: 850, icon: "🏠", status: "active" },
     { id: 2, name: "Électricité", amount: 75, icon: "⚡", status: "active" },
@@ -8,7 +9,7 @@ const defaultExpenses = [
 
 let expenses = JSON.parse(localStorage.getItem('comptesCommuns')) || JSON.parse(JSON.stringify(defaultExpenses));
 let currentIndex = 0;
-let reviewSession = []; // Tableau temporaire pour le mois en cours
+let reviewSession = []; 
 
 // --- NAVIGATION ---
 const views = {
@@ -24,7 +25,6 @@ function showView(viewName) {
 
 // --- ACCUEIL ---
 function updateHome() {
-    // On calcule le total de toutes les dépenses qui ne sont pas supprimées
     const activeExpenses = expenses.filter(e => e.status !== 'deleted');
     const total = activeExpenses.reduce((sum, item) => sum + item.amount, 0);
     document.getElementById('home-total').textContent = `${total} €`;
@@ -32,10 +32,8 @@ function updateHome() {
 
 // --- DÉMARRER "FAIRE LES COMPTES" ---
 document.getElementById('btn-start').addEventListener('click', () => {
-    // On récupère toutes les dépenses actives pour les passer en revue
     reviewSession = expenses.filter(e => e.status !== 'deleted');
     
-    // S'il n'y a rien à passer en revue, on va direct au récap
     if (reviewSession.length === 0) {
         updateRecap();
         showView('recap');
@@ -49,7 +47,6 @@ document.getElementById('btn-start').addEventListener('click', () => {
     showView('swipe');
 });
 
-// Annuler la session de swipe en cours et retourner à l'accueil
 document.getElementById('btn-cancel-swipe').addEventListener('click', () => {
     showView('home');
 });
@@ -60,7 +57,6 @@ let startX = 0, isDragging = false;
 
 function renderCard() {
     if (currentIndex >= reviewSession.length) {
-        // Fin de la revue ! On sauvegarde les modifications dans la base principale
         saveData();
         updateRecap();
         showView('recap');
@@ -92,8 +88,8 @@ cardContainer.addEventListener('touchmove', (e) => {
     const deltaX = e.touches[0].clientX - startX;
     cardContainer.style.transform = `translate(${deltaX}px, 0) rotate(${deltaX * 0.05}deg)`;
     
-    if (deltaX > 50) cardContainer.style.backgroundColor = '#e8f5e9'; // Vert
-    else if (deltaX < -50) cardContainer.style.backgroundColor = '#ffebee'; // Rouge
+    if (deltaX > 50) cardContainer.style.backgroundColor = '#e8f5e9'; 
+    else if (deltaX < -50) cardContainer.style.backgroundColor = '#ffebee'; 
     else cardContainer.style.backgroundColor = 'var(--surface-color)';
 });
 
@@ -105,10 +101,10 @@ cardContainer.addEventListener('touchend', (e) => {
 
     if (deltaX > 100) {
         cardContainer.style.transform = `translate(150vw, 0) rotate(20deg)`;
-        handleAction('active'); // Confirmé : on garde
+        handleAction('active'); 
     } else if (deltaX < -100) {
         cardContainer.style.transform = `translate(-150vw, 0) rotate(-20deg)`;
-        handleAction('deleted'); // Supprimé
+        handleAction('deleted'); 
     } else {
         cardContainer.style.transform = 'translate(0px, 0px) rotate(0deg)';
         cardContainer.style.backgroundColor = 'var(--surface-color)';
@@ -118,7 +114,6 @@ cardContainer.addEventListener('touchend', (e) => {
 function handleAction(newStatus) {
     reviewSession[currentIndex].status = newStatus;
     
-    // Met à jour la base de données globale immédiatement
     const globalIndex = expenses.findIndex(e => e.id === reviewSession[currentIndex].id);
     if(globalIndex !== -1) expenses[globalIndex].status = newStatus;
     
@@ -133,29 +128,27 @@ function handleAction(newStatus) {
 }
 
 function saveData() {
-    // Nettoie définitivement les supprimés de la base de données
     expenses = expenses.filter(e => e.status !== 'deleted');
     localStorage.setItem('comptesCommuns', JSON.stringify(expenses));
     updateHome();
 }
 
-// --- MODIFICATION ---
+// --- MODIFICATION D'UNE CARTE ---
 document.getElementById('btn-edit').addEventListener('click', () => {
     const expense = reviewSession[currentIndex];
     const newAmount = prompt(`Nouveau montant pour ${expense.name} (€) :`, expense.amount);
     
     if (newAmount !== null && !isNaN(newAmount) && newAmount.trim() !== "") {
         expense.amount = parseFloat(newAmount);
-        // Met à jour dans la base globale
         const globalIndex = expenses.findIndex(e => e.id === expense.id);
         if(globalIndex !== -1) expenses[globalIndex].amount = expense.amount;
         
         renderCard();
-        saveData(); // Sauvegarde immédiate
+        saveData(); 
     }
 });
 
-// --- ANNULATION (UNDO SWIPE) ---
+// --- ANNULATION (UNDO) ---
 const btnUndo = document.getElementById('btn-undo');
 function updateUndoButton() {
     btnUndo.disabled = currentIndex === 0;
@@ -164,7 +157,6 @@ function updateUndoButton() {
 btnUndo.addEventListener('click', () => {
     if (currentIndex > 0) {
         currentIndex--;
-        // On remet le statut "actif" par défaut en cas d'annulation d'une suppression
         reviewSession[currentIndex].status = 'active'; 
         const globalIndex = expenses.findIndex(e => e.id === reviewSession[currentIndex].id);
         if(globalIndex !== -1) expenses[globalIndex].status = 'active';
@@ -202,5 +194,26 @@ function updateRecap() {
     });
 }
 
-// Démarrage de l'application
+// --- AJOUTER UNE NOUVELLE DÉPENSE ---
+document.getElementById('btn-add-expense').addEventListener('click', () => {
+    const name = prompt("Nom de la nouvelle dépense :");
+    if (!name || name.trim() === "") return; 
+
+    const amountStr = prompt(`Montant pour ${name} (€) :`);
+    if (!amountStr || isNaN(amountStr) || amountStr.trim() === "") return; 
+
+    const newExpense = {
+        id: Date.now(), 
+        name: name.trim(),
+        amount: parseFloat(amountStr),
+        icon: "📝", 
+        status: "active"
+    };
+
+    expenses.push(newExpense);
+    saveData(); 
+    updateRecap();
+});
+
+// Initialisation au lancement
 updateHome();
