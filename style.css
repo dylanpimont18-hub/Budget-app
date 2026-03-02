@@ -1,211 +1,83 @@
-/* Réinitialisation de base */
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+:root {
+    --bg-color: #f4f4f6;
+    --surface-color: #ffffff;
+    --text-main: #1d1d1f;
+    --text-muted: #86868b;
+    --success: #34c759;
+    --danger: #ff3b30;
+    --primary: #007aff;
+    --radius: 24px;
 }
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
 body {
-    background-color: #f0f2f5;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    overflow: hidden; /* Empêche le scroll lors du swipe */
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    overflow: hidden;
+    touch-action: none;
 }
 
-/* Conteneur principal (Mobile-First) */
-#app-container {
-    width: 100%;
-    max-width: 400px; /* Largeur max d'un smartphone */
-    height: 100vh;
-    max-height: 800px;
-    background-color: #ffffff;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    position: relative;
-}
+#app { width: 100vw; height: 100dvh; position: relative; }
 
-header {
-    text-align: center;
-    padding: 20px;
-    background-color: #ffffff;
-    border-bottom: 1px solid #eee;
-    z-index: 10;
+.view {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
 }
+.view.active { opacity: 1; pointer-events: all; }
 
-header h1 {
-    font-size: 1.2rem;
-    color: #333;
+header { padding: 20px; text-align: center; color: var(--text-muted); font-weight: 600; }
+.header-with-back { display: flex; justify-content: space-between; align-items: center; padding: 20px; }
+
+/* --- ACCUEIL --- */
+.center-content { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.subtitle { font-size: 1.2rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.giant-total { font-size: 5rem; font-weight: 800; color: var(--text-main); letter-spacing: -2px; margin-top: 10px; }
+
+.action-buttons { padding: 30px; display: flex; flex-direction: column; gap: 15px; }
+
+.btn-primary, .btn-secondary, .btn-outline {
+    border: none; padding: 18px; border-radius: 16px; font-size: 1.1rem; font-weight: 600; cursor: pointer; width: 100%; max-width: 400px; margin: 0 auto;
 }
+.btn-primary { background: var(--primary); color: white; }
+.btn-secondary { background: var(--surface-color); color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.btn-outline { background: var(--bg-color); color: var(--text-main); padding: 12px 24px; border-radius: 100px; margin-top: 20px;}
+.btn-text { background: none; border: none; color: var(--primary); font-size: 1rem; font-weight: 600; cursor: pointer; }
+.btn-text:disabled { opacity: 0.3; color: var(--text-muted); }
 
-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    position: relative;
-}
-
-/* --- VUE SWIPE --- */
-#card-stack {
-    flex: 1;
-    position: relative;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
+/* --- SWIPE --- */
+.card-area { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; }
 .card {
-    position: absolute;
-    width: 100%;
-    height: 300px;
-    background: linear-gradient(135deg, #ffffff, #f9f9f9);
-    border-radius: 20px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    border: 1px solid #eaeaea;
-    transition: transform 0.3s ease, opacity 0.3s ease;
-    user-select: none;
-    cursor: grab;
+    background: var(--surface-color); width: 85%; max-width: 350px; aspect-ratio: 3/4;
+    border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; position: absolute; z-index: 10; user-select: none; will-change: transform;
 }
+.card-content { text-align: center; margin-bottom: 20px; }
+.emoji { font-size: 5rem; margin-bottom: 20px; }
+.card h2 { font-size: 1.5rem; margin-bottom: 10px; }
+.amount { font-size: 2.5rem; font-weight: 800; color: var(--primary); }
 
-.card:active {
-    cursor: grabbing;
-}
-
-.card .icon {
-    font-size: 5rem;
-    margin-bottom: 20px;
-}
-
-.card .name {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 10px;
-}
-
-.card .amount {
-    font-size: 2rem;
-    color: #007aff;
-    font-weight: 800;
-}
-
-/* Animations de Swipe gérées par CSS */
-.swipe-left-anim {
-    transform: translate(-150%, 20px) rotate(-15deg) !important;
-    opacity: 0;
-}
-
-.swipe-right-anim {
-    transform: translate(150%, 20px) rotate(15deg) !important;
-    opacity: 0;
-}
-
-/* Contrôles (Boutons en bas) */
-.controls {
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    padding: 20px 0 40px 0;
-}
-
-.control-btn {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    border: none;
-    background-color: #fff;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    font-size: 1.5rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    transition: transform 0.1s;
-}
-
-.control-btn:active {
-    transform: scale(0.9);
-}
-
-.control-btn.cancel { color: #ff3b30; }
-.control-btn.edit { color: #8e8e93; width: 50px; height: 50px; font-size: 1.2rem; }
-.control-btn.validate { color: #34c759; }
-
-/* --- VUE BILAN --- */
-.hidden {
-    display: none !important;
-}
-
-#summary-view {
-    text-align: center;
-    justify-content: center;
-}
-
-#summary-view h2 {
-    font-size: 1.2rem;
-    color: #666;
-    margin-bottom: 10px;
-}
-
-#total-amount {
-    font-size: 3.5rem;
-    font-weight: 900;
-    color: #34c759;
-    margin-bottom: 30px;
-}
-
-.summary-details {
-    text-align: left;
-    background: #f8f9fa;
-    padding: 20px;
-    border-radius: 15px;
-    margin-bottom: 30px;
-    max-height: 250px;
-    overflow-y: auto;
-}
-
-.summary-details h3 {
-    font-size: 1rem;
-    margin-bottom: 15px;
-    color: #333;
-}
-
-#validated-list {
-    list-style: none;
-}
-
-#validated-list li {
+/* NOUVEAUX INDICATEURS (Rouge et Vert) */
+.swipe-guides {
     display: flex;
     justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid #eaeaea;
-}
-
-#validated-list li:last-child {
-    border-bottom: none;
-}
-
-.primary-btn {
-    width: 100%;
-    padding: 15px;
-    background-color: #007aff;
-    color: white;
-    border: none;
-    border-radius: 10px;
+    padding: 0 30px 10px 30px;
+    font-weight: 700;
     font-size: 1.1rem;
-    font-weight: bold;
-    cursor: pointer;
+    user-select: none;
 }
+.guide-red { color: var(--danger); }
+.guide-green { color: var(--success); }
+footer { padding: 30px; text-align: center; }
 
-.primary-btn:active {
-    background-color: #005bb5;
-}
+/* --- RÉCAP --- */
+.summary-area { flex: 1; display: flex; flex-direction: column; padding: 0 20px; overflow-y: auto; }
+.recap-header { display: flex; justify-content: space-between; background: var(--surface-color); padding: 20px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+.recap-stat { font-size: 1.2rem; font-weight: 600; color: var(--text-muted); }
+.recap-stat.highlight { color: var(--text-main); font-weight: 800; font-size: 1.4rem; }
+
+.expense-list { list-style: none; width: 100%; max-width: 400px; margin: 0 auto; padding-bottom: 40px; }
+.expense-list li { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 1.1rem; }

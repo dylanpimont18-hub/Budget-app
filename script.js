@@ -1,201 +1,206 @@
-// --- 1. MODÈLE DE DONNÉES ET INITIALISATION ---
-const STORAGE_KEY = 'comptes_communs_data';
-
-// Données par défaut si le LocalStorage est vide
 const defaultExpenses = [
-    { id: 1, name: 'Loyer', amount: 800.00, icon: '🏠', isActive: true },
-    { id: 2, name: 'Électricité', amount: 60.50, icon: '⚡', isActive: true },
-    { id: 3, name: 'Internet', amount: 29.99, icon: '🌐', isActive: true },
-    { id: 4, name: 'Assurance Habitation', amount: 15.00, icon: '🛡️', isActive: true },
-    { id: 5, name: 'Netflix', amount: 13.49, icon: '🎬', isActive: true }
+    { id: 1, name: "Loyer", amount: 850, icon: "🏠", status: "active" },
+    { id: 2, name: "Électricité", amount: 75, icon: "⚡", status: "active" },
+    { id: 3, name: "Internet", amount: 40, icon: "🌐", status: "active" },
+    { id: 4, name: "Assurance", amount: 35, icon: "🛡️", status: "active" },
+    { id: 5, name: "Abonnements", amount: 15, icon: "🍿", status: "active" }
 ];
 
-let expenses = [];
-let activeExpenses = [];
-let validatedExpenses = [];
-let totalAmount = 0;
+let expenses = JSON.parse(localStorage.getItem('comptesCommuns')) || JSON.parse(JSON.stringify(defaultExpenses));
+let currentIndex = 0;
+let reviewSession = []; // Tableau temporaire pour le mois en cours
 
-// Variables pour la gestion du swipe tactile
-let startX = 0;
-let currentX = 0;
+// --- NAVIGATION ---
+const views = {
+    home: document.getElementById('view-home'),
+    swipe: document.getElementById('view-swipe'),
+    recap: document.getElementById('view-recap')
+};
 
-// Éléments du DOM
-const cardStack = document.getElementById('card-stack');
-const swipeView = document.getElementById('swipe-view');
-const summaryView = document.getElementById('summary-view');
-const totalAmountElement = document.getElementById('total-amount');
-const validatedListElement = document.getElementById('validated-list');
+function showView(viewName) {
+    Object.values(views).forEach(v => v.classList.remove('active'));
+    views[viewName].classList.add('active');
+}
 
-// --- 2. FONCTIONS DE DÉMARRAGE ---
-function init() {
-    // Récupération des données ou injection des données par défaut
-    const storedData = localStorage.getItem(STORAGE_KEY);
-    if (storedData) {
-        expenses = JSON.parse(storedData);
-    } else {
-        expenses = [...defaultExpenses];
-        saveData();
-    }
+// --- ACCUEIL ---
+function updateHome() {
+    // On calcule le total de toutes les dépenses qui ne sont pas supprimées
+    const activeExpenses = expenses.filter(e => e.status !== 'deleted');
+    const total = activeExpenses.reduce((sum, item) => sum + item.amount, 0);
+    document.getElementById('home-total').textContent = `${total} €`;
+}
 
-    // On ne garde que les fiches "actives" pour ce mois-ci
-    activeExpenses = expenses.filter(exp => exp.isActive);
+// --- DÉMARRER "FAIRE LES COMPTES" ---
+document.getElementById('btn-start').addEventListener('click', () => {
+    // On récupère toutes les dépenses actives pour les passer en revue
+    reviewSession = expenses.filter(e => e.status !== 'deleted');
     
-    if (activeExpenses.length === 0) {
-        showSummary();
-    } else {
-        renderCards();
+    // S'il n'y a rien à passer en revue, on va direct au récap
+    if (reviewSession.length === 0) {
+        updateRecap();
+        showView('recap');
+        return;
     }
+
+    currentIndex = 0;
+    renderCard();
+    updateProgress();
+    updateUndoButton();
+    showView('swipe');
+});
+
+// Annuler la session de swipe en cours et retourner à l'accueil
+document.getElementById('btn-cancel-swipe').addEventListener('click', () => {
+    showView('home');
+});
+
+// --- LOGIQUE DE SWIPE ---
+const cardContainer = document.getElementById('card-container');
+let startX = 0, isDragging = false;
+
+function renderCard() {
+    if (currentIndex >= reviewSession.length) {
+        // Fin de la revue ! On sauvegarde les modifications dans la base principale
+        saveData();
+        updateRecap();
+        showView('recap');
+        return;
+    }
+    
+    const expense = reviewSession[currentIndex];
+    document.getElementById('card-icon').textContent = expense.icon;
+    document.getElementById('card-name').textContent = expense.name;
+    document.getElementById('card-amount').textContent = `${expense.amount} €`;
+    
+    cardContainer.style.transition = 'none';
+    cardContainer.style.transform = 'translate(0px, 0px) rotate(0deg)';
+    cardContainer.style.backgroundColor = 'var(--surface-color)';
+}
+
+function updateProgress() {
+    document.getElementById('progress-text').textContent = `${currentIndex + 1} / ${reviewSession.length}`;
+}
+
+cardContainer.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    isDragging = true;
+    cardContainer.style.transition = 'none';
+});
+
+cardContainer.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const deltaX = e.touches[0].clientX - startX;
+    cardContainer.style.transform = `translate(${deltaX}px, 0) rotate(${deltaX * 0.05}deg)`;
+    
+    if (deltaX > 50) cardContainer.style.backgroundColor = '#e8f5e9'; // Vert
+    else if (deltaX < -50) cardContainer.style.backgroundColor = '#ffebee'; // Rouge
+    else cardContainer.style.backgroundColor = 'var(--surface-color)';
+});
+
+cardContainer.addEventListener('touchend', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    const deltaX = e.changedTouches[0].clientX - startX;
+    cardContainer.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+
+    if (deltaX > 100) {
+        cardContainer.style.transform = `translate(150vw, 0) rotate(20deg)`;
+        handleAction('active'); // Confirmé : on garde
+    } else if (deltaX < -100) {
+        cardContainer.style.transform = `translate(-150vw, 0) rotate(-20deg)`;
+        handleAction('deleted'); // Supprimé
+    } else {
+        cardContainer.style.transform = 'translate(0px, 0px) rotate(0deg)';
+        cardContainer.style.backgroundColor = 'var(--surface-color)';
+    }
+});
+
+function handleAction(newStatus) {
+    reviewSession[currentIndex].status = newStatus;
+    
+    // Met à jour la base de données globale immédiatement
+    const globalIndex = expenses.findIndex(e => e.id === reviewSession[currentIndex].id);
+    if(globalIndex !== -1) expenses[globalIndex].status = newStatus;
+    
+    setTimeout(() => {
+        currentIndex++;
+        renderCard();
+        if(currentIndex < reviewSession.length) {
+            updateProgress();
+            updateUndoButton();
+        }
+    }, 300);
 }
 
 function saveData() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+    // Nettoie définitivement les supprimés de la base de données
+    expenses = expenses.filter(e => e.status !== 'deleted');
+    localStorage.setItem('comptesCommuns', JSON.stringify(expenses));
+    updateHome();
 }
 
-// --- 3. GESTION DES CARTES (UI) ---
-function renderCards() {
-    cardStack.innerHTML = '';
+// --- MODIFICATION ---
+document.getElementById('btn-edit').addEventListener('click', () => {
+    const expense = reviewSession[currentIndex];
+    const newAmount = prompt(`Nouveau montant pour ${expense.name} (€) :`, expense.amount);
     
-    // On affiche les cartes à l'envers pour que la première de la liste soit au-dessus
-    activeExpenses.slice().reverse().forEach((exp, index) => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        // Effet d'empilement visuel
-        card.style.transform = `scale(${1 - index * 0.05}) translateY(${index * 10}px)`;
-        card.style.zIndex = activeExpenses.length - index;
-        card.dataset.id = exp.id;
-
-        card.innerHTML = `
-            <div class="icon">${exp.icon}</div>
-            <div class="name">${exp.name}</div>
-            <div class="amount">${exp.amount.toFixed(2)} €</div>
-        `;
-
-        // Seule la carte du dessus (index 0 dans l'affichage renversé) écoute le tactile
-        if (index === 0) {
-            setupTouchEvents(card);
-        }
-
-        cardStack.appendChild(card);
-    });
-}
-
-// --- 4. LOGIQUE MÉTIER (Validation, Modification, Résiliation) ---
-function processCurrentCard(action) {
-    if (activeExpenses.length === 0) return;
-
-    // Récupère la carte du dessus (la première du tableau)
-    const currentExp = activeExpenses[0];
-    const topCardElement = cardStack.lastElementChild; // last child car empilé à l'envers
-
-    if (action === 'validate') {
-        topCardElement.classList.add('swipe-right-anim');
-        validatedExpenses.push(currentExp);
-        totalAmount += currentExp.amount;
-    } else if (action === 'cancel') {
-        topCardElement.classList.add('swipe-left-anim');
-        // On désactive l'abonnement dans les données globales
-        const indexInGlobal = expenses.findIndex(e => e.id === currentExp.id);
-        if (indexInGlobal !== -1) {
-            expenses[indexInGlobal].isActive = false;
-            saveData();
-        }
+    if (newAmount !== null && !isNaN(newAmount) && newAmount.trim() !== "") {
+        expense.amount = parseFloat(newAmount);
+        // Met à jour dans la base globale
+        const globalIndex = expenses.findIndex(e => e.id === expense.id);
+        if(globalIndex !== -1) expenses[globalIndex].amount = expense.amount;
+        
+        renderCard();
+        saveData(); // Sauvegarde immédiate
     }
+});
 
-    // Retire l'élément du tableau actif
-    activeExpenses.shift();
-
-    // Attend la fin de l'animation CSS avant de mettre à jour le DOM
-    setTimeout(() => {
-        if (activeExpenses.length > 0) {
-            renderCards();
-        } else {
-            showSummary();
-        }
-    }, 300); // 300ms correspond à la transition CSS
+// --- ANNULATION (UNDO SWIPE) ---
+const btnUndo = document.getElementById('btn-undo');
+function updateUndoButton() {
+    btnUndo.disabled = currentIndex === 0;
 }
 
-function editCurrentCard() {
-    if (activeExpenses.length === 0) return;
-    
-    const currentExp = activeExpenses[0];
-    const newAmountStr = prompt(`Modifier le montant pour ${currentExp.name} (€):`, currentExp.amount);
-    
-    if (newAmountStr !== null) {
-        const newAmount = parseFloat(newAmountStr.replace(',', '.'));
-        if (!isNaN(newAmount) && newAmount >= 0) {
-            // Mise à jour locale
-            currentExp.amount = newAmount;
-            // Mise à jour globale
-            const indexInGlobal = expenses.findIndex(e => e.id === currentExp.id);
-            if (indexInGlobal !== -1) {
-                expenses[indexInGlobal].amount = newAmount;
-                saveData();
-            }
-            renderCards(); // Rafraîchit l'affichage
-        } else {
-            alert('Montant invalide.');
-        }
+btnUndo.addEventListener('click', () => {
+    if (currentIndex > 0) {
+        currentIndex--;
+        // On remet le statut "actif" par défaut en cas d'annulation d'une suppression
+        reviewSession[currentIndex].status = 'active'; 
+        const globalIndex = expenses.findIndex(e => e.id === reviewSession[currentIndex].id);
+        if(globalIndex !== -1) expenses[globalIndex].status = 'active';
+        
+        renderCard();
+        updateProgress();
+        updateUndoButton();
     }
-}
+});
 
-// --- 5. GESTION DU TACTILE (Swipe) ---
-function setupTouchEvents(card) {
-    card.addEventListener('touchstart', (e) => {
-        startX = e.touches[0].clientX;
-        card.style.transition = 'none'; // Désactive l'animation le temps du drag
-    });
+// --- RÉCAPITULATIF ---
+document.getElementById('btn-go-recap').addEventListener('click', () => {
+    updateRecap();
+    showView('recap');
+});
 
-    card.addEventListener('touchmove', (e) => {
-        currentX = e.touches[0].clientX;
-        const diffX = currentX - startX;
-        // Rotation et déplacement proportionnels
-        card.style.transform = `translateX(${diffX}px) rotate(${diffX * 0.05}deg)`;
-    });
+document.getElementById('btn-back-home').addEventListener('click', () => {
+    updateHome();
+    showView('home');
+});
 
-    card.addEventListener('touchend', (e) => {
-        const diffX = currentX - startX;
-        card.style.transition = 'transform 0.3s ease, opacity 0.3s ease'; // Réactive l'animation
-
-        if (diffX > 100) {
-            processCurrentCard('validate'); // Swipe Droit
-        } else if (diffX < -100) {
-            processCurrentCard('cancel'); // Swipe Gauche
-        } else {
-            // Reviens au centre si le swipe n'est pas assez fort
-            card.style.transform = `scale(1) translateY(0px)`;
-        }
-    });
-}
-
-// --- 6. LE BILAN ---
-function showSummary() {
-    swipeView.classList.add('hidden');
-    summaryView.classList.remove('hidden');
-
-    totalAmountElement.textContent = `${totalAmount.toFixed(2)} €`;
-
-    validatedListElement.innerHTML = '';
-    validatedExpenses.forEach(exp => {
+function updateRecap() {
+    const activeExpenses = expenses.filter(e => e.status !== 'deleted');
+    const total = activeExpenses.reduce((sum, item) => sum + item.amount, 0);
+    
+    document.getElementById('recap-count').textContent = `${activeExpenses.length} dépenses`;
+    document.getElementById('recap-total').textContent = `${total} €`;
+    
+    const listEl = document.getElementById('summary-list');
+    listEl.innerHTML = '';
+    activeExpenses.forEach(item => {
         const li = document.createElement('li');
-        li.innerHTML = `<span>${exp.icon} ${exp.name}</span> <strong>${exp.amount.toFixed(2)} €</strong>`;
-        validatedListElement.appendChild(li);
+        li.innerHTML = `<span>${item.icon} ${item.name}</span> <strong>${item.amount} €</strong>`;
+        listEl.appendChild(li);
     });
 }
 
-function resetCycle() {
-    // Réinitialise l'état pour une nouvelle utilisation
-    validatedExpenses = [];
-    totalAmount = 0;
-    swipeView.classList.remove('hidden');
-    summaryView.classList.add('hidden');
-    init(); // Recharge depuis le LocalStorage
-}
-
-// --- 7. ÉCOUTEURS D'ÉVÉNEMENTS (Boutons) ---
-document.getElementById('btn-validate').addEventListener('click', () => processCurrentCard('validate'));
-document.getElementById('btn-cancel').addEventListener('click', () => processCurrentCard('cancel'));
-document.getElementById('btn-edit').addEventListener('click', editCurrentCard);
-document.getElementById('btn-finish').addEventListener('click', resetCycle);
-
-// Lancement de l'application
-init();
+// Démarrage de l'application
+updateHome();

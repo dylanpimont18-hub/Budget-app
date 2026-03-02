@@ -1,0 +1,15 @@
+{
+  "name": "Comptes Communs",
+  "short_name": "Comptes",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f4f6",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/account_balance_wallet/materialicons/144dpi/1_x/ic_account_balance_wallet_black_48dp.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    }
+  ]
+}

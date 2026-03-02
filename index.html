@@ -5,42 +5,69 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Comptes Communs</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Comptes">
 </head>
 <body>
-    <div id="app-container">
-        <header>
-            <h1>Comptes Communs</h1>
-        </header>
+    <div id="app">
+        <section id="view-home" class="view active">
+            <header>
+                <h2>Budget Mensuel</h2>
+            </header>
+            <main class="center-content">
+                <p class="subtitle">Total estimé</p>
+                <div class="giant-total" id="home-total">0 €</div>
+            </main>
+            <footer class="action-buttons">
+                <button id="btn-start" class="btn-primary">Faire les comptes</button>
+                <button id="btn-go-recap" class="btn-secondary">Voir le récap</button>
+            </footer>
+        </section>
 
-        <main id="swipe-view">
-            <div id="card-stack">
+        <section id="view-swipe" class="view">
+            <header class="header-with-back">
+                <button id="btn-cancel-swipe" class="btn-text">✕ Annuler</button>
+                <div class="progress" id="progress-text">1 / 5</div>
+            </header>
+            
+            <main class="card-area">
+                <div id="card-container" class="card">
+                    <div class="card-content">
+                        <div id="card-icon" class="emoji">🏠</div>
+                        <h2 id="card-name">Loyer</h2>
+                        <div id="card-amount" class="amount">850 €</div>
+                    </div>
+                    <button id="btn-edit" class="btn-outline">Modifier le montant</button>
                 </div>
-            
-            <div class="controls">
-                <button id="btn-cancel" class="control-btn cancel" title="Terminer (Swipe Gauche)">
-                    <span class="icon">❌</span>
-                </button>
-                <button id="btn-edit" class="control-btn edit" title="Modifier le montant">
-                    <span class="icon">✏️</span>
-                </button>
-                <button id="btn-validate" class="control-btn validate" title="Valider (Swipe Droit)">
-                    <span class="icon">✅</span>
-                </button>
-            </div>
-        </main>
+            </main>
 
-        <main id="summary-view" class="hidden">
-            <h2>À provisionner ce mois-ci</h2>
-            <div id="total-amount">0,00 €</div>
+            <div class="swipe-guides">
+                <span class="guide-red">← 🗑️ Supprimer</span>
+                <span class="guide-green">Valider ✅ →</span>
+            </div>
+
+            <footer>
+                <button id="btn-undo" class="btn-text" disabled>↩ Annuler le dernier swipe</button>
+            </footer>
+        </section>
+
+        <section id="view-recap" class="view">
+            <header class="header-with-back">
+                <button id="btn-back-home" class="btn-text">← Accueil</button>
+                <h2>Récapitulatif</h2>
+            </header>
             
-            <div class="summary-details">
-                <h3>Dépenses validées :</h3>
-                <ul id="validated-list">
+            <main class="summary-area">
+                <div class="recap-header">
+                    <div id="recap-count" class="recap-stat">0 dépenses</div>
+                    <div id="recap-total" class="recap-stat highlight">0 €</div>
+                </div>
+                <ul id="summary-list" class="expense-list">
                     </ul>
-            </div>
-
-            <button id="btn-finish" class="primary-btn">Terminer pour ce mois</button>
-        </main>
+            </main>
+        </section>
     </div>
 
     <script src="script.js"></script>
