@@ -14,8 +14,7 @@
 body {
     background-color: var(--bg-color);
     color: var(--text-main);
-    overflow: hidden;
-    touch-action: none;
+    touch-action: manipulation;
 }
 
 #app { width: 100vw; height: 100dvh; position: relative; }
@@ -24,9 +23,10 @@ body {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     display: flex; flex-direction: column;
     opacity: 0; pointer-events: none;
-    transition: opacity 0.3s ease;
+    transform: translateY(18px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
-.view.active { opacity: 1; pointer-events: all; }
+.view.active { opacity: 1; pointer-events: all; transform: translateY(0); }
 
 header { padding: 20px; text-align: center; color: var(--text-muted); font-weight: 600; }
 .header-with-back { display: flex; justify-content: space-between; align-items: center; padding: 20px; }
@@ -46,6 +46,7 @@ header { padding: 20px; text-align: center; color: var(--text-muted); font-weigh
 .btn-outline { background: var(--surface-color); color: var(--text-main); padding: 12px 24px; border-radius: 100px; margin-top: 20px; border: 1px solid rgba(0,0,0,0.1); }
 .btn-text { background: none; border: none; color: var(--primary); font-size: 1rem; font-weight: 600; cursor: pointer; }
 .btn-text:disabled { opacity: 0.3; color: var(--text-muted); cursor: not-allowed; }
+.btn-small { font-size: 0.95rem; padding: 6px 10px; border-radius: 12px; }
 
 /* --- SWIPE --- */
 .card-area { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; }
@@ -73,4 +74,29 @@ footer { padding: 30px; text-align: center; }
 .recap-stat.highlight { color: var(--text-main); font-weight: 800; font-size: 1.4rem; }
 
 .expense-list { list-style: none; width: 100%; max-width: 400px; margin: 0 auto; padding-bottom: 20px; }
-.expense-list li { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 1.1rem; }
+.expense-list li { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 1.1rem; }
+.expense-list li .expense-item { display: flex; flex-direction: column; gap: 8px; }
+.expense-list li .expense-actions { display: flex; gap: 10px; align-items: center; }
+.expense-list li .expense-actions button { color: var(--primary); }
+
+.recap-actions { display: flex; flex-direction: column; gap: 12px; margin: 20px auto; width: 100%; max-width: 400px; }
+
+.modal { display: none; position: fixed; inset: 0; background: rgba(18, 18, 18, 0.45); backdrop-filter: blur(5px); align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+.modal.open { display: flex; }
+.modal.open .modal-content { animation: pop-in 0.22s ease-out; }
+.modal-content { background: var(--surface-color); border-radius: 28px; width: 100%; max-width: 420px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); position: relative; transform: translateY(-12px); opacity: 0; transition: transform 0.22s ease, opacity 0.22s ease; }
+.modal.open .modal-content { transform: translateY(0); opacity: 1; }
+.modal-content h2 { margin-bottom: 20px; font-size: 1.5rem; }
+
+@keyframes pop-in {
+    from { transform: scale(0.96) translateY(-10px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+}
+.modal-close { position: absolute; top: 16px; right: 16px; color: var(--text-muted); }
+.modal-content label { display: block; margin: 16px 0 8px; color: var(--text-muted); font-weight: 600; }
+.modal-content input { width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.12); font-size: 1rem; }
+.modal-content input:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+.modal-actions { display: flex; justify-content: space-between; gap: 15px; margin-top: 24px; }
+
+.btn-primary, .btn-secondary, .btn-outline, .btn-text, .btn-small { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.btn-primary:focus-visible, .btn-secondary:focus-visible, .btn-outline:focus-visible, .btn-text:focus-visible { outline: 3px solid rgba(0, 122, 255, 0.35); outline-offset: 2px; }

@@ -58,6 +58,7 @@
 
             <footer>
                 <button id="btn-undo" class="btn-text" disabled>↩ Annuler le dernier swipe</button>
+                <button id="btn-skip-swipe" class="btn-secondary" type="button">Voir le récap</button>
             </footer>
         </section>
 
@@ -72,12 +73,30 @@
                     <div id="recap-count" class="recap-stat">0 dépenses</div>
                     <div id="recap-total" class="recap-stat highlight">0 €</div>
                 </div>
-                <ul id="summary-list" class="expense-list">
-                    </ul>
-                
-                <button id="btn-add-expense" class="btn-outline" style="margin: 20px auto; display: block; width: 100%; max-width: 400px;">+ Nouvelle dépense</button>
+                <ul id="summary-list" class="expense-list"></ul>
+                <div class="recap-actions">
+                    <button id="btn-add-expense" class="btn-outline">+ Nouvelle dépense</button>
+                    <button id="btn-reset-data" class="btn-text">Réinitialiser les données</button>
+                </div>
             </main>
         </section>
+    </div>
+
+    <div id="expense-modal" class="modal" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <button id="btn-close-modal" class="btn-text modal-close" aria-label="Fermer le formulaire">✕</button>
+            <h2 id="modal-title">Nouvelle dépense</h2>
+            <form id="expense-form">
+                <label for="expense-name">Nom de la dépense</label>
+                <input id="expense-name" name="name" type="text" required autocomplete="off">
+                <label for="expense-amount">Montant (€)</label>
+                <input id="expense-amount" name="amount" type="number" min="0" step="0.01" required>
+                <div class="modal-actions">
+                    <button type="button" id="btn-cancel-form" class="btn-text">Annuler</button>
+                    <button type="submit" class="btn-primary">Enregistrer</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="script.js"></script>

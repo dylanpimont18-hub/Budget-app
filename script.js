@@ -9,7 +9,19 @@ const defaultExpenses = [
 
 let expenses = JSON.parse(localStorage.getItem('comptesCommuns')) || JSON.parse(JSON.stringify(defaultExpenses));
 let currentIndex = 0;
-let reviewSession = []; 
+let reviewSession = [];
+let editExpenseId = null;
+
+const expenseModal = document.getElementById('expense-modal');
+const expenseForm = document.getElementById('expense-form');
+const expenseNameInput = document.getElementById('expense-name');
+const expenseAmountInput = document.getElementById('expense-amount');
+const modalTitle = document.getElementById('modal-title');
+const btnCloseModal = document.getElementById('btn-close-modal');
+const btnCancelForm = document.getElementById('btn-cancel-form');
+const btnSkipSwipe = document.getElementById('btn-skip-swipe');
+const btnResetData = document.getElementById('btn-reset-data');
+const summaryList = document.getElementById('summary-list');
 
 // --- NAVIGATION ---
 const views = {
@@ -30,6 +42,78 @@ function updateHome() {
     document.getElementById('home-total').textContent = `${total} €`;
 }
 
+function openExpenseForm(expense = null) {
+    editExpenseId = expense ? expense.id : null;
+    modalTitle.textContent = expense ? `Modifier ${expense.name}` : 'Nouvelle dépense';
+    expenseNameInput.value = expense ? expense.name : '';
+    expenseAmountInput.value = expense ? expense.amount : '';
+    expenseModal.classList.add('open');
+    expenseModal.setAttribute('aria-hidden', 'false');
+    expenseNameInput.focus();
+}
+
+function closeExpenseForm() {
+    expenseModal.classList.remove('open');
+    expenseModal.setAttribute('aria-hidden', 'true');
+    expenseForm.reset();
+    editExpenseId = null;
+}
+
+function saveExpenseForm(event) {
+    event.preventDefault();
+    const name = expenseNameInput.value.trim();
+    const amount = parseFloat(expenseAmountInput.value);
+    if (!name || isNaN(amount) || amount < 0) return;
+
+    if (editExpenseId !== null) {
+        const index = expenses.findIndex(item => item.id === editExpenseId);
+        if (index !== -1) {
+            expenses[index].name = name;
+            expenses[index].amount = amount;
+        }
+    } else {
+        expenses.push({
+            id: Date.now(),
+            name,
+            amount,
+            icon: '📝',
+            status: 'active'
+        });
+    }
+
+    saveData();
+    updateRecap();
+
+    if (views.swipe.classList.contains('active')) {
+        reviewSession = expenses.filter(e => e.status !== 'deleted');
+        currentIndex = Math.min(currentIndex, Math.max(reviewSession.length - 1, 0));
+        renderCard();
+        updateProgress();
+        updateUndoButton();
+    }
+
+    closeExpenseForm();
+}
+
+function deleteExpense(expenseId) {
+    const expense = expenses.find(item => item.id === expenseId);
+    if (!expense) return;
+    const confirmed = confirm(`Supprimer définitivement “${expense.name}” ?`);
+    if (!confirmed) return;
+
+    expenses = expenses.filter(item => item.id !== expenseId);
+    saveData();
+    updateRecap();
+}
+
+function restoreDefaultData() {
+    if (!confirm('Réinitialiser toutes les dépenses aux valeurs par défaut ?')) return;
+    expenses = JSON.parse(JSON.stringify(defaultExpenses));
+    saveData();
+    updateRecap();
+    updateHome();
+}
+
 // --- DÉMARRER "FAIRE LES COMPTES" ---
 document.getElementById('btn-start').addEventListener('click', () => {
     reviewSession = expenses.filter(e => e.status !== 'deleted');
@@ -44,6 +128,37 @@ document.getElementById('btn-start').addEventListener('click', () => {
 
 document.getElementById('btn-cancel-swipe').addEventListener('click', () => {
     showView('home');
+});
+
+btnSkipSwipe.addEventListener('click', () => {
+    updateRecap();
+    showView('recap');
+});
+
+btnCloseModal.addEventListener('click', closeExpenseForm);
+btnCancelForm.addEventListener('click', closeExpenseForm);
+expenseForm.addEventListener('submit', saveExpenseForm);
+
+summaryList.addEventListener('click', (event) => {
+    const editButton = event.target.closest('.edit-expense');
+    const deleteButton = event.target.closest('.delete-expense');
+    if (editButton) {
+        const expenseId = Number(editButton.dataset.id);
+        const expense = expenses.find(item => item.id === expenseId);
+        if (expense) openExpenseForm(expense);
+    }
+    if (deleteButton) {
+        const expenseId = Number(deleteButton.dataset.id);
+        deleteExpense(expenseId);
+    }
+});
+
+btnResetData.addEventListener('click', restoreDefaultData);
+
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && expenseModal.classList.contains('open')) {
+        closeExpenseForm();
+    }
 });
 
 // --- LOGIQUE DE SWIPE ---
@@ -154,17 +269,11 @@ function saveData() {
 // --- MODIFICATION D'UNE CARTE ---
 document.getElementById('btn-edit').addEventListener('click', () => {
     const expense = reviewSession[currentIndex];
-    const newAmount = prompt(`Nouveau montant pour ${expense.name} (€) :`, expense.amount);
-    
-    if (newAmount !== null && !isNaN(newAmount) && newAmount.trim() !== "") {
-        expense.amount = parseFloat(newAmount);
-        const globalIndex = expenses.findIndex(e => e.id === expense.id);
-        if(globalIndex !== -1) expenses[globalIndex].amount = expense.amount;
-        
-        renderCard();
-        saveData(); 
-    }
+    openExpenseForm(expense);
 });
+
+document.getElementById('btn-add-expense').addEventListener('click', () => openExpenseForm());
+document.getElementById('btn-add-swipe').addEventListener('click', () => openExpenseForm());
 
 // --- ANNULATION (UNDO) ---
 const btnUndo = document.getElementById('btn-undo');
@@ -203,12 +312,20 @@ function updateRecap() {
     document.getElementById('recap-count').textContent = `${activeExpenses.length} dépenses`;
     document.getElementById('recap-total').textContent = `${total} €`;
     
-    const listEl = document.getElementById('summary-list');
-    listEl.innerHTML = '';
+    summaryList.innerHTML = '';
     activeExpenses.forEach(item => {
         const li = document.createElement('li');
-        li.innerHTML = `<span>${item.icon} ${item.name}</span> <strong>${item.amount} €</strong>`;
-        listEl.appendChild(li);
+        li.innerHTML = `
+            <div class="expense-item">
+                <span>${item.icon} ${item.name}</span>
+                <div class="expense-actions">
+                    <button class="btn-text btn-small edit-expense" data-id="${item.id}" type="button">✎ Modifier</button>
+                    <button class="btn-text btn-small delete-expense" data-id="${item.id}" type="button" aria-label="Supprimer ${item.name}">🗑️ Supprimer</button>
+                </div>
+            </div>
+            <strong>${item.amount} €</strong>
+        `;
+        summaryList.appendChild(li);
     });
 }
 
