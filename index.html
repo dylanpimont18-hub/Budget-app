@@ -23,6 +23,7 @@
             <footer class="action-buttons">
                 <button id="btn-start" class="btn-primary">Faire les comptes</button>
                 <button id="btn-go-recap" class="btn-secondary">Voir le récap</button>
+                <button id="btn-go-compare" class="btn-outline">Simuler un scénario</button>
             </footer>
         </section>
 
@@ -76,8 +77,31 @@
                 <ul id="summary-list" class="expense-list"></ul>
                 <div class="recap-actions">
                     <button id="btn-add-expense" class="btn-outline">+ Nouvelle dépense</button>
+                    <button id="btn-go-compare-recap" class="btn-outline">Simuler un scénario</button>
                     <button id="btn-reset-data" class="btn-text">Réinitialiser les données</button>
                 </div>
+            </main>
+        </section>
+        <section id="view-compare" class="view">
+            <header class="header-with-back">
+                <button id="btn-back-from-compare" class="btn-text">← Retour</button>
+                <h2>Scénario</h2>
+            </header>
+            <main class="compare-area">
+                <div class="compare-summary">
+                    <div class="compare-col">
+                        <div class="compare-label">Actuel</div>
+                        <div class="compare-amount" id="compare-current">0 €</div>
+                    </div>
+                    <div class="compare-sep">→</div>
+                    <div class="compare-col">
+                        <div class="compare-label">Scénario</div>
+                        <div class="compare-amount" id="compare-scenario">0 €</div>
+                    </div>
+                </div>
+                <div class="compare-delta neutral" id="compare-delta">Aucune modification</div>
+                <ul id="compare-list" class="compare-list"></ul>
+                <button id="btn-reset-scenario" class="btn-text danger-text">Réinitialiser le scénario</button>
             </main>
         </section>
     </div>
