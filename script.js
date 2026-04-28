@@ -11,6 +11,8 @@ let expenses = JSON.parse(localStorage.getItem('comptesCommuns')) || JSON.parse(
 let currentIndex = 0;
 let reviewSession = [];
 let editExpenseId = null;
+let scenarioOverrides = JSON.parse(localStorage.getItem('comptesCommuns_scenario')) || {};
+let previousView = 'home';
 
 const expenseModal = document.getElementById('expense-modal');
 const expenseForm = document.getElementById('expense-form');
@@ -27,7 +29,8 @@ const summaryList = document.getElementById('summary-list');
 const views = {
     home: document.getElementById('view-home'),
     swipe: document.getElementById('view-swipe'),
-    recap: document.getElementById('view-recap')
+    recap: document.getElementById('view-recap'),
+    compare: document.getElementById('view-compare')
 };
 
 function showView(viewName) {
@@ -102,6 +105,8 @@ function deleteExpense(expenseId) {
     if (!confirmed) return;
 
     expenses = expenses.filter(item => item.id !== expenseId);
+    delete scenarioOverrides[expenseId];
+    saveScenario();
     saveData();
     updateRecap();
 }
@@ -109,6 +114,8 @@ function deleteExpense(expenseId) {
 function restoreDefaultData() {
     if (!confirm('Réinitialiser toutes les dépenses aux valeurs par défaut ?')) return;
     expenses = JSON.parse(JSON.stringify(defaultExpenses));
+    scenarioOverrides = {};
+    saveScenario();
     saveData();
     updateRecap();
     updateHome();
@@ -329,51 +336,114 @@ function updateRecap() {
     });
 }
 
-// --- AJOUTER UNE NOUVELLE DÉPENSE (DEPUIS LE RÉCAP) ---
-document.getElementById('btn-add-expense').addEventListener('click', () => {
-    const name = prompt("Nom de la nouvelle dépense :");
-    if (!name || name.trim() === "") return; 
+// --- SCÉNARIO / COMPARAISON ---
+function saveScenario() {
+    localStorage.setItem('comptesCommuns_scenario', JSON.stringify(scenarioOverrides));
+}
 
-    const amountStr = prompt(`Montant pour ${name} (€) :`);
-    if (!amountStr || isNaN(amountStr) || amountStr.trim() === "") return; 
+function fmtDiff(diff) {
+    const n = parseFloat(diff.toFixed(2));
+    if (n === 0) return '=';
+    return n > 0 ? `+${n} €` : `${n} €`;
+}
 
-    const newExpense = {
-        id: Date.now(), 
-        name: name.trim(),
-        amount: parseFloat(amountStr),
-        icon: "📝", 
-        status: "active"
-    };
+function renderCompare() {
+    const active = expenses.filter(e => e.status !== 'deleted');
+    const list = document.getElementById('compare-list');
+    list.innerHTML = '';
 
-    expenses.push(newExpense);
-    saveData(); 
-    updateRecap();
+    active.forEach(item => {
+        const scenAmt = scenarioOverrides[item.id] !== undefined ? scenarioOverrides[item.id] : item.amount;
+        const diff = parseFloat((scenAmt - item.amount).toFixed(2));
+        const badgeClass = diff < 0 ? 'saving' : diff > 0 ? 'more' : 'same';
+
+        const li = document.createElement('li');
+        li.className = 'compare-item';
+        li.innerHTML = `
+            <div class="compare-item-top">
+                <span class="compare-item-name">${item.icon} ${item.name}</span>
+                <span class="compare-item-original">${item.amount} €</span>
+            </div>
+            <div class="compare-item-bottom">
+                <div class="compare-input-wrap">
+                    <input type="number" min="0" step="0.01" inputmode="decimal"
+                        value="${scenAmt}" data-id="${item.id}">
+                    <span class="unit">€</span>
+                </div>
+                <span class="compare-badge ${badgeClass}">${fmtDiff(diff)}</span>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+
+    updateCompareSummary();
+}
+
+function updateCompareSummary() {
+    const active = expenses.filter(e => e.status !== 'deleted');
+    const currentTotal = active.reduce((s, e) => s + e.amount, 0);
+    const scenTotal = parseFloat(active.reduce((s, e) => {
+        return s + (scenarioOverrides[e.id] !== undefined ? scenarioOverrides[e.id] : e.amount);
+    }, 0).toFixed(2));
+    const delta = parseFloat((scenTotal - currentTotal).toFixed(2));
+
+    document.getElementById('compare-current').textContent = `${currentTotal} €`;
+    document.getElementById('compare-scenario').textContent = `${scenTotal} €`;
+
+    const deltaEl = document.getElementById('compare-delta');
+    if (delta === 0) {
+        deltaEl.className = 'compare-delta neutral';
+        deltaEl.textContent = 'Aucune modification';
+    } else if (delta < 0) {
+        deltaEl.className = 'compare-delta saving';
+        deltaEl.textContent = `Économies : ${Math.abs(delta)} €/mois`;
+    } else {
+        deltaEl.className = 'compare-delta more';
+        deltaEl.textContent = `Surcoût : +${delta} €/mois`;
+    }
+}
+
+document.getElementById('compare-list').addEventListener('input', e => {
+    const input = e.target.closest('input[data-id]');
+    if (!input) return;
+    const id = Number(input.dataset.id);
+    const val = parseFloat(input.value);
+    if (isNaN(val) || val < 0) return;
+
+    const original = expenses.find(ex => ex.id === id);
+    if (!original) return;
+
+    if (parseFloat(val.toFixed(2)) === original.amount) {
+        delete scenarioOverrides[id];
+    } else {
+        scenarioOverrides[id] = val;
+    }
+    saveScenario();
+    updateCompareSummary();
+
+    const diff = parseFloat((val - original.amount).toFixed(2));
+    const badge = input.closest('.compare-item').querySelector('.compare-badge');
+    badge.className = `compare-badge ${diff < 0 ? 'saving' : diff > 0 ? 'more' : 'same'}`;
+    badge.textContent = fmtDiff(diff);
 });
 
-// --- AJOUTER UNE DÉPENSE DEPUIS L'ÉCRAN SWIPE (QUAND VIDE) ---
-document.getElementById('btn-add-swipe').addEventListener('click', () => {
-    const name = prompt("Nom de la nouvelle dépense :");
-    if (!name || name.trim() === "") return; 
+document.getElementById('btn-back-from-compare').addEventListener('click', () => showView(previousView));
 
-    const amountStr = prompt(`Montant pour ${name} (€) :`);
-    if (!amountStr || isNaN(amountStr) || amountStr.trim() === "") return; 
-
-    const newExpense = {
-        id: Date.now(), 
-        name: name.trim(),
-        amount: parseFloat(amountStr),
-        icon: "📝", 
-        status: "active"
-    };
-
-    expenses.push(newExpense);
-    saveData(); 
-    
-    // Mettre à jour la session en cours avec la nouvelle dépense et relancer l'affichage
-    reviewSession = expenses.filter(e => e.status !== 'deleted');
-    renderCard();
-    updateProgress();
+document.getElementById('btn-reset-scenario').addEventListener('click', () => {
+    if (!confirm('Réinitialiser le scénario ?')) return;
+    scenarioOverrides = {};
+    saveScenario();
+    renderCompare();
 });
+
+function goToCompare(from) {
+    previousView = from;
+    renderCompare();
+    showView('compare');
+}
+
+document.getElementById('btn-go-compare').addEventListener('click', () => goToCompare('home'));
+document.getElementById('btn-go-compare-recap').addEventListener('click', () => goToCompare('recap'));
 
 // Initialisation au lancement
 updateHome();
