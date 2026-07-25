@@ -2,10 +2,11 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Comptes Communs</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f4f4f6">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Comptes">
@@ -19,28 +20,38 @@
             <main class="center-content">
                 <p class="subtitle">Total estimé</p>
                 <div class="giant-total" id="home-total">0 €</div>
+                <div class="home-delta" id="home-delta"></div>
+                <div class="home-trend" id="home-trend" style="display:none;">
+                    <svg id="trend-sparkline" viewBox="0 0 100 30" preserveAspectRatio="none"></svg>
+                </div>
+                <div class="home-top" id="home-top"></div>
             </main>
             <footer class="action-buttons">
                 <button id="btn-start" class="btn-primary">Faire les comptes</button>
-                <button id="btn-go-recap" class="btn-secondary">Voir le récap</button>
-                <button id="btn-go-compare" class="btn-outline">Simuler un scénario</button>
             </footer>
+            <button id="btn-fab-add" class="fab" type="button" aria-label="Ajouter une dépense">+</button>
         </section>
 
         <section id="view-swipe" class="view">
             <header class="header-with-back">
                 <button id="btn-cancel-swipe" class="btn-text">✕ Annuler</button>
                 <div class="progress" id="progress-text">1 / 5</div>
+                <button id="btn-sort-swipe" class="btn-text" type="button">↕︎ Défaut</button>
             </header>
-            
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar-fill"></div></div>
+
             <main class="card-area">
-                <div id="card-container" class="card">
-                    <div class="card-content">
-                        <div id="card-icon" class="emoji">🏠</div>
-                        <h2 id="card-name">Loyer</h2>
-                        <div id="card-amount" class="amount">850 €</div>
+                <div id="card-stack">
+                    <div id="card-back-2" class="card card-stacked"></div>
+                    <div id="card-back-1" class="card card-stacked"></div>
+                    <div id="card-container" class="card">
+                        <div class="card-content">
+                            <div id="card-icon" class="emoji">🏠</div>
+                            <h2 id="card-name">Loyer</h2>
+                            <div id="card-amount" class="amount">850 €</div>
+                        </div>
+                        <button id="btn-edit" class="btn-outline">Modifier le montant</button>
                     </div>
-                    <button id="btn-edit" class="btn-outline">Modifier le montant</button>
                 </div>
 
                 <div id="empty-card" class="card" style="display: none;">
@@ -64,30 +75,42 @@
         </section>
 
         <section id="view-recap" class="view">
-            <header class="header-with-back">
-                <button id="btn-back-home" class="btn-text">← Accueil</button>
+            <header>
                 <h2>Récapitulatif</h2>
             </header>
-            
             <main class="summary-area">
                 <div class="recap-header">
                     <div id="recap-count" class="recap-stat">0 dépenses</div>
                     <div id="recap-total" class="recap-stat highlight">0 €</div>
                 </div>
+                <div class="recap-tools">
+                    <input type="search" id="recap-search" placeholder="🔍 Rechercher..." autocomplete="off">
+                    <select id="recap-sort">
+                        <option value="default">Ordre d'ajout</option>
+                        <option value="amount-desc">Montant ↓</option>
+                        <option value="amount-asc">Montant ↑</option>
+                        <option value="name">Alphabétique</option>
+                    </select>
+                </div>
                 <ul id="summary-list" class="expense-list"></ul>
+                <p id="recap-empty-state" class="empty-hint" style="display:none;">Aucun résultat</p>
                 <div class="recap-actions">
                     <button id="btn-add-expense" class="btn-outline">+ Nouvelle dépense</button>
-                    <button id="btn-go-compare-recap" class="btn-outline">Simuler un scénario</button>
                     <button id="btn-reset-data" class="btn-text">Réinitialiser les données</button>
                 </div>
             </main>
         </section>
+
         <section id="view-compare" class="view">
-            <header class="header-with-back">
-                <button id="btn-back-from-compare" class="btn-text">← Retour</button>
+            <header>
                 <h2>Scénario</h2>
             </header>
             <main class="compare-area">
+                <div class="scenario-tools">
+                    <select id="scenario-select"></select>
+                    <button id="btn-save-scenario" class="btn-text" type="button">💾</button>
+                    <button id="btn-delete-scenario" class="btn-text danger-text" type="button" style="display:none;">🗑️</button>
+                </div>
                 <div class="compare-summary">
                     <div class="compare-col">
                         <div class="compare-label">Actuel</div>
@@ -99,11 +122,39 @@
                         <div class="compare-amount" id="compare-scenario">0 €</div>
                     </div>
                 </div>
+                <div class="compare-bars">
+                    <div class="compare-bar-row"><span>Actuel</span><div class="bar-track"><div class="bar-fill current" id="bar-current"></div></div></div>
+                    <div class="compare-bar-row"><span>Scénario</span><div class="bar-track"><div class="bar-fill scenario" id="bar-scenario"></div></div></div>
+                </div>
                 <div class="compare-delta neutral" id="compare-delta">Aucune modification</div>
                 <ul id="compare-list" class="compare-list"></ul>
                 <button id="btn-reset-scenario" class="btn-text danger-text">Réinitialiser le scénario</button>
             </main>
         </section>
+    </div>
+
+    <nav id="bottom-nav" class="bottom-nav">
+        <button class="nav-btn" data-view="home" type="button" aria-label="Accueil">
+            <span class="nav-icon">🏠</span><span class="nav-label">Accueil</span>
+        </button>
+        <button class="nav-btn" data-view="recap" type="button" aria-label="Récapitulatif">
+            <span class="nav-icon">📋</span><span class="nav-label">Récap</span>
+        </button>
+        <button class="nav-btn" data-view="compare" type="button" aria-label="Scénario">
+            <span class="nav-icon">🔀</span><span class="nav-label">Scénario</span>
+        </button>
+    </nav>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <div id="onboarding" class="onboarding" style="display:none;">
+        <div class="onboarding-content">
+            <div class="emoji">👋</div>
+            <h2>Bienvenue !</h2>
+            <p>Glisse une carte à <strong>droite ✅</strong> pour la valider, ou à <strong>gauche 🗑️</strong> pour la supprimer.</p>
+            <p>Dans le récap, glisse une ligne vers la gauche pour la supprimer, tape dessus pour la modifier.</p>
+            <button id="btn-onboarding-close" class="btn-primary" type="button">C'est compris !</button>
+        </div>
     </div>
 
     <div id="expense-modal" class="modal" aria-hidden="true">
@@ -114,7 +165,9 @@
                 <label for="expense-name">Nom de la dépense</label>
                 <input id="expense-name" name="name" type="text" required autocomplete="off">
                 <label for="expense-amount">Montant (€)</label>
-                <input id="expense-amount" name="amount" type="number" min="0" step="0.01" required>
+                <input id="expense-amount" name="amount" type="number" min="0" step="0.01" required inputmode="decimal">
+                <label>Icône</label>
+                <div id="emoji-picker" class="emoji-picker"></div>
                 <div class="modal-actions">
                     <button type="button" id="btn-cancel-form" class="btn-text">Annuler</button>
                     <button type="submit" class="btn-primary">Enregistrer</button>
