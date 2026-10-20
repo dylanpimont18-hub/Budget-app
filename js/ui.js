@@ -27,7 +27,8 @@ export function el(tag, attrs = {}, ...enfants) {
   return noeud;
 }
 
-function ajouter(parent, enfants) {
+// Ajoute des enfants en aplatissant les tableaux et en ignorant null/false (contrairement à Element.append)
+export function ajouter(parent, enfants) {
   for (const enfant of enfants) {
     if (enfant == null || enfant === false) continue;
     if (Array.isArray(enfant)) ajouter(parent, enfant);
