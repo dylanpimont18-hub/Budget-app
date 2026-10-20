@@ -28,9 +28,16 @@ export function rendreRecurrentes(conteneur, {revue: demarrerRevue = false} = {}
   else rendreListe(conteneur);
 }
 
+// Pendant la revue, le bouton « + » flottant masquerait « Terminer »
+const boutonAjout = (visible) => {
+  const b = document.getElementById('btn-ajout-rapide');
+  if (b) b.hidden = !visible;
+};
+
 // ── Liste ──────────────────────────────────────────────────────────────
 
 function rendreListe(conteneur) {
+  boutonAjout(true);
   const {recurrentes} = etat.donnees;
   const lectureSeule = enLectureSeule();
   const total = recurrentes.reduce((t, r) => t + Number(r.montant), 0);
@@ -208,6 +215,7 @@ function rendreRevue(conteneur) {
     terminerRevue(conteneur);
     return;
   }
+  boutonAjout(false);
   const ligne = revue.lignes[revue.index];
   const qui = prenomDe(ligne.membre_id);
   const carte = el('div', {class: 'carte-swipe', role: 'group', 'aria-label': `${ligne.libelle}, ${formatEUR(Number(ligne.montant))}`},
@@ -216,10 +224,18 @@ function rendreRevue(conteneur) {
     qui ? el('div', {class: 'attenue'}, `Perso · ${qui}`) : null,
     ligne.variable ? null : el('div', {class: 'montant'}, formatEUR(Number(ligne.montant))));
 
-  // Charge variable : le montant de ce mois se saisit sous la carte, il est enregistré en la gardant
-  const champ = ligne.variable
-    ? champMontant({id: 'revue-montant', etiquette: 'Montant ce mois-ci', valeur: ligne.montant, grand: true})
-    : null;
+  // Montant : à saisir pour une charge variable ; modifiable sur demande pour une charge fixe.
+  // Il est enregistré en gardant la charge.
+  const champ = champMontant({id: 'revue-montant', etiquette: ligne.variable ? 'Montant ce mois-ci' : 'Nouveau montant',
+    valeur: ligne.montant, grand: true});
+  const blocMontant = el('div', {hidden: !ligne.variable}, champ.element,
+    ligne.variable ? null : el('p', {class: 'attenue', style: {margin: 0}}, 'Vaut aussi pour les mois suivants.'));
+  const btnModifier = ligne.variable ? null : el('button', {class: 'btn-texte', type: 'button', onclick: () => {
+    blocMontant.hidden = false;
+    btnModifier.hidden = true;
+    champ.input.focus();
+    champ.input.select();
+  }}, 'Modifier le montant');
   // Avec un solde saisi, on note si la charge en est déjà sortie (pour ne pas la retirer deux fois)
   const avecSolde = etat.donnees.membresMois.some((m) => m.solde != null);
   const prelevee = avecSolde
@@ -229,13 +245,15 @@ function rendreRevue(conteneur) {
   const decider = async (action) => {
     if (revue.occupe) return;
     let montant = null;
-    if (action === 'garder' && champ) {
+    if (action === 'garder' && !blocMontant.hidden) {
       const r = champ.valider();
       if (!r.ok) { champ.input.focus(); return; }
       montant = r.valeur;
     }
     const dansSolde = prelevee ? prelevee.lire() : Boolean(ligne.dans_solde);
-    const aEnregistrer = action === 'garder' && (montant != null || dansSolde !== Boolean(ligne.dans_solde));
+    // Une charge variable est toujours enregistrée (elle n'est plus « à confirmer »)
+    const montantChange = montant != null && (ligne.variable || montant !== Number(ligne.montant));
+    const aEnregistrer = action === 'garder' && (montantChange || dansSolde !== Boolean(ligne.dans_solde));
     revue.occupe = true;
     carte.style.transition = 'transform 0.3s ease';
     carte.style.transform = `translate(${action === 'garder' ? '' : '-'}150vw, 0) rotate(${action === 'garder' ? 20 : -20}deg)`;
@@ -284,9 +302,11 @@ function rendreRevue(conteneur) {
       el('span', {class: 'pastille', 'aria-live': 'polite'}, `${revue.index + 1} / ${revue.lignes.length}`)),
     el('p', {class: 'attenue'}, 'Cette charge tombe-t-elle ce mois-ci ? Glisse à droite pour la garder, à gauche pour la retirer de ce mois.'),
     el('div', {class: 'zone-swipe'}, carte),
-    champ ? champ.element : el('div', {class: 'guides-swipe'},
+    ligne.variable ? null : el('div', {class: 'guides-swipe'},
       el('span', {class: 'gauche'}, '← Retirer du mois'),
       el('span', {class: 'droite'}, 'Garder →')),
+    blocMontant,
+    btnModifier,
     prelevee?.element,
     el('div', {class: 'rangee'},
       el('button', {class: 'btn-danger', type: 'button', onclick: () => decider('retirer')}, '✕ Retirer'),
