@@ -4,12 +4,16 @@ import {etat, abonner, recharger, rechargerEnFond, demarrerTempsReel, arreterTem
 import {cleMois} from './calc.js';
 import {el, toast} from './ui.js';
 import {rendreConnexion, rendreChoixFoyer} from './vues/connexion.js';
+import {rendreOuverture} from './vues/ouverture.js';
 
 const vue = document.getElementById('vue');
 const nav = document.getElementById('onglets');
 const btnAjout = document.getElementById('btn-ajout-rapide');
 
 const rendus = {
+  // Provisoire : remplacé par l'onglet Récurrentes (Task 7)
+  recurrentes: (c) => c.append(el('h1', {}, 'Récurrentes'),
+    el('p', {}, `${etat.donnees?.recurrentes.length ?? 0} charges ce mois-ci`)),
   // Provisoire : remplacé par le tableau de bord (Task 10)
   tableau: (c) => c.append(
     el('h1', {}, etat.foyer?.nom ?? 'Budget'),
@@ -27,14 +31,14 @@ function afficherEcran(rendre) {
   rendre(vue);
 }
 
-export function afficherOnglet(nom) {
+export function afficherOnglet(nom, options) {
   ongletActif = nom;
   nav.hidden = false;
   btnAjout.hidden = false;
   for (const b of nav.querySelectorAll('button')) {
     b.setAttribute('aria-current', b.dataset.onglet === nom ? 'page' : 'false');
   }
-  rendreOngletActif();
+  rendreOngletActif(options);
   window.scrollTo(0, 0);
 }
 
@@ -100,18 +104,13 @@ async function lancer() {
     await recharger();
     demarrerTempsReel();
     if (!etat.donnees.mois) {
-      afficherEcran(rendreOuvertureProvisoire);
+      afficherEcran((c) => rendreOuverture(c, {apres: () => afficherOnglet('recurrentes', {revue: true})}));
       return;
     }
     afficherOnglet('tableau');
   } catch (e) {
     afficherErreurDemarrage(e.message);
   }
-}
-
-// Provisoire : remplacé par la vue d'ouverture du mois (Task 6)
-function rendreOuvertureProvisoire(c) {
-  c.append(el('h1', {}, 'Ouverture du mois'));
 }
 
 surAuth((evenement) => {

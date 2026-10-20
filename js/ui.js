@@ -1,4 +1,5 @@
-// Helpers DOM : création d'éléments, feuille modale du bas, toast.
+// Helpers DOM : création d'éléments, feuille modale du bas, toast, champ montant.
+import {parseMontant} from './calc.js';
 
 // el('button', {class: 'btn', onclick: f}, 'Texte', autreElement)
 // Les textes sont insérés en nœuds texte : jamais d'innerHTML pour des données utilisateur.
@@ -75,4 +76,56 @@ export function toast(message, {type = 'info'} = {}) {
     t.classList.remove('visible');
     setTimeout(() => t.remove(), 300);
   }, type === 'erreur' ? 4500 : 2800);
+}
+
+// Écrit un nombre au format de saisie français (12.5 → "12,5")
+export const versSaisie = (n) => (n == null ? '' : String(n).replace('.', ','));
+
+// Champ montant validé en direct.
+// vide : 'interdit' (requis), 'zero' (vide = 0) ou 'null' (vide = non renseigné)
+// strict : refuse 0 (dépenses)
+export function champMontant({id, etiquette, valeur = null, negatif = false, vide = 'interdit', strict = false,
+                              grand = false, surChange} = {}) {
+  const input = el('input', {class: 'champ montant' + (grand ? ' grand' : ''), id, type: 'text', inputmode: 'decimal',
+    autocomplete: 'off', placeholder: '0,00', value: versSaisie(valeur)});
+  const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
+  let touche = false;
+
+  function lire() {
+    const texte = input.value.trim();
+    if (!texte) {
+      if (vide === 'zero') return {ok: true, valeur: 0};
+      if (vide === 'null') return {ok: true, valeur: null};
+      return {ok: false, valeur: null, message: 'Montant requis'};
+    }
+    const n = parseMontant(texte, {negatif});
+    if (n == null || (strict && n <= 0)) return {ok: false, valeur: null, message: 'Montant invalide'};
+    return {ok: true, valeur: n};
+  }
+
+  function afficher(forcer = false) {
+    const r = lire();
+    const visible = forcer || touche;
+    input.classList.toggle('invalide', visible && !r.ok);
+    input.setAttribute('aria-invalid', String(!r.ok));
+    message.textContent = visible && !r.ok ? r.message : '';
+    return r;
+  }
+
+  input.addEventListener('input', () => { touche = true; afficher(); surChange?.(); });
+
+  const ligne = negatif
+    ? el('div', {class: 'rangee', style: {alignItems: 'center'}}, input,
+        el('button', {class: 'btn-secondaire', type: 'button', style: {flex: '0 0 56px', width: '56px'},
+          'aria-label': 'Changer le signe', onclick: () => {
+            const t = input.value.trim();
+            input.value = t.startsWith('-') ? t.slice(1) : '-' + t;
+            touche = true; afficher(); surChange?.();
+          }}, '±'))
+    : input;
+
+  const element = el('div', {},
+    etiquette ? el('label', {class: 'etiquette', for: id}, etiquette) : null,
+    ligne, message);
+  return {element, input, lire, valider: () => afficher(true)};
 }
