@@ -3,6 +3,9 @@
 PWA statique (GitHub Pages) en modules ES natifs, données dans Supabase (projet `budget-familial`, eu-west-3).
 Tests : `npm test` (logique pure) et `supabase/tests/rls_et_rpc.sql` (base, à lancer dans le SQL Editor).
 
+## CLAUDE.md
+Guide pour Claude Code : architecture, commandes, conventions.
+
 ## index.html
 Coquille : `#vue`, barre d'onglets `#onglets`, bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
 
