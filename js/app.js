@@ -8,6 +8,7 @@ import {rendreOuverture} from './vues/ouverture.js';
 import {rendreRecurrentes} from './vues/recurrentes.js';
 import {rendreDepenses} from './vues/depenses.js';
 import {initAjoutRapide} from './vues/ajout-rapide.js';
+import {rendreTableau} from './vues/tableau.js';
 
 const vue = document.getElementById('vue');
 const nav = document.getElementById('onglets');
@@ -16,11 +17,7 @@ const btnAjout = document.getElementById('btn-ajout-rapide');
 const rendus = {
   recurrentes: rendreRecurrentes,
   depenses: rendreDepenses,
-  // Provisoire : remplacé par le tableau de bord (Task 10)
-  tableau: (c) => c.append(
-    el('h1', {}, etat.foyer?.nom ?? 'Budget'),
-    el('p', {}, "Code d'invitation : ",el('strong', {}, etat.foyer?.code_invitation ?? '')),
-    el('button', {class: 'btn-texte', type: 'button', onclick: seDeconnecter}, 'Se déconnecter')),
+  tableau: rendreTableau,
 };
 let ongletActif = null;
 

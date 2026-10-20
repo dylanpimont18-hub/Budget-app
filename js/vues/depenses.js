@@ -112,14 +112,24 @@ export function formulaireDepense({depense = null, onValider}) {
 
 // ── Onglet ─────────────────────────────────────────────────────────────
 
-export function rendreDepenses(conteneur) {
-  const {depenses, moisDisponibles} = etat.donnees;
+// ‹ mois ›, limité aux mois ouverts (partagé avec le tableau de bord)
+export function selecteurMois() {
+  const {moisDisponibles} = etat.donnees;
   const cle = etat.moisCle;
   const mois = moisDisponibles.includes(cle) ? moisDisponibles : [cle, ...moisDisponibles];
   const idx = mois.indexOf(cle);
-  const total = depenses.reduce((t, d) => t + Number(d.montant), 0);
-
   const naviguer = (nouvelle) => changerMois(nouvelle).catch((e) => toast(e.message, {type: 'erreur'}));
+  return el('div', {class: 'selecteur-mois'},
+    el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Mois précédent', disabled: idx >= mois.length - 1,
+      onclick: () => naviguer(mois[idx + 1])}, '‹'),
+    el('h1', {}, libelleMois(cle)),
+    el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Mois suivant', disabled: idx <= 0,
+      onclick: () => naviguer(mois[idx - 1])}, '›'));
+}
+
+export function rendreDepenses(conteneur) {
+  const {depenses} = etat.donnees;
+  const total = depenses.reduce((t, d) => t + Number(d.montant), 0);
 
   const btnMode = (mode, texte) => el('button', {type: 'button', 'aria-pressed': String(regroupement === mode), onclick: () => {
     regroupement = mode;
@@ -128,12 +138,7 @@ export function rendreDepenses(conteneur) {
   }}, texte);
 
   conteneur.append(
-    el('div', {class: 'selecteur-mois'},
-      el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Mois précédent', disabled: idx >= mois.length - 1,
-        onclick: () => naviguer(mois[idx + 1])}, '‹'),
-      el('h1', {}, libelleMois(cle)),
-      el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Mois suivant', disabled: idx <= 0,
-        onclick: () => naviguer(mois[idx - 1])}, '›')),
+    selecteurMois(),
     el('div', {class: 'entete-vue'},
       el('span', {class: 'attenue'}, `${depenses.length} dépense${depenses.length > 1 ? 's' : ''}`),
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
