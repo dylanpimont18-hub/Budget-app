@@ -1,41 +1,35 @@
 ---
 name: "Budget App workspace instructions"
-description: "Guidance for editing this static budget tracker web app with HTML/CSS/JS and PWA manifest."
+description: "Guidance for editing the family budget PWA (static ES modules + Supabase)."
 applyTo: "**/*"
 ---
 
 ## Project Purpose
-This repository is a simple static budget tracker web app. It uses:
-- `index.html` for structure and page content
-- `style.css` for styling and responsive layout
-- `script.js` for budget logic, DOM interaction, and persistence
-- `manifest.json` for Progressive Web App metadata
+Family budget PWA shared by a couple in real time. Static front end served by GitHub Pages, data in Supabase
+(Auth email/password, Postgres with row-level security per household, Realtime). UI and messages are in French.
+
+- `index.html`: page shell (view container, bottom tab bar, quick-add button, sheet container).
+- `style.css`: terracotta design tokens (`:root`) and components, mobile first (375 px).
+- `js/`: native ES modules, no bundler. See `CODEBASE_MAP.md` for the role of each file and function.
+  - `js/calc.js`: pure calculations (amounts, months, budget summary, goals). No DOM, no network.
+  - `js/db.js`: the only place that talks to Supabase.
+  - `js/etat.js`: app state store, reload and Realtime.
+  - `js/vues/*.js`: one module per screen/tab.
+- `supabase/migrations/`: schema, RLS and RPC (applied with the Supabase MCP `apply_migration`).
+- `supabase/tests/rls_et_rpc.sql`: SQL test run in a `begin … rollback` block.
+- There is no `script.js` any more.
 
 ## How to Work
-- Keep the app static: no build tools, no Node.js packages, and no framework dependencies.
-- Prefer semantic HTML and accessible form controls.
-- Keep styling responsive and mobile-friendly.
-- Keep JavaScript modular and readable within `script.js`.
-- Use browser preview or a lightweight local server for testing.
-
-## Conventions
-- `index.html` is the single page shell and should contain page structure and IDs/classes used by `script.js`.
-- `style.css` should handle layout, spacing, colors, typography, and responsive breakpoints.
-- `script.js` should handle adding/removing budget items, calculating totals, filtering data, and saving state.
-- `manifest.json` should remain focused on PWA metadata; avoid moving app logic there.
+- Keep the app static: no build step, no npm dependencies. `package.json` only holds the test script.
+- `supabase-js` is loaded from jsDelivr with a pinned version.
+- Only the public (anon) Supabase key may appear in the code; never a service key.
+- Insert user data with `textContent` (the `el()` helper), never `innerHTML`.
+- Amounts are parsed with `parseMontant` (French keyboard: `12,50`) and displayed with `formatEUR`.
+- Keep touch targets ≥ 44 px and no horizontal scroll at 375 px.
 
 ## Testing & Preview
-There is no dedicated build or test system. For local preview, use a browser or a simple HTTP server such as:
-
 ```bash
-python -m http.server 8000
+npm test                     # node --test on tests/*.test.js
+python -m http.server 8000   # then open http://localhost:8000
 ```
-
-Then open `http://localhost:8000`.
-
-## Helpful Prompts
-- "Improve accessibility and keyboard navigation for the budget app."
-- "Make this app fully responsive on mobile, tablet, and desktop."
-- "Add support for categories and monthly totals in `script.js`."
-- "Refactor the JavaScript so DOM updates and calculations are separated."
-- "Suggest UI improvements for the budget tracker layout and color contrast."
+Run `supabase/tests/rls_et_rpc.sql` in the Supabase SQL Editor after any database change.
