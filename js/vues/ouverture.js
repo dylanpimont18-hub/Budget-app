@@ -1,8 +1,9 @@
-// Ouverture du mois : salaires, soldes (information), autres revenus, versements vers les objectifs.
-import {ouvrirMois, chargerMois} from '../db.js';
+// Ouverture du mois : sa propre part (salaire, solde), autres revenus, charges déjà prélevées, versements.
+// Le solde est le point de départ du calcul : on note ce qui y est déjà compris pour ne rien compter deux fois.
+import {ouvrirMois, chargerMois, chargerRecurrentesModele} from '../db.js';
 import {etat, recharger} from '../etat.js';
-import {libelleMois, suiviObjectif} from '../calc.js';
-import {el, champMontant, toast} from '../ui.js';
+import {formatEUR, libelleMois, suiviObjectif} from '../calc.js';
+import {el, champMontant, choixOuiNon, caseACocher, toast} from '../ui.js';
 import {estArchive} from './objectifs.js';
 
 const REVENUS_PAR_DEFAUT = ['Allocations familiales (CAF)', 'Autres revenus (primes…)'];
@@ -17,39 +18,45 @@ export async function rendreOuverture(conteneur, {apres}) {
   const section = el('section', {}, el('h1', {}, titreOuverture(cle)), el('p', {class: 'chargement'}, 'Chargement…'));
   conteneur.append(section);
 
-  // Pré-remplissage depuis le dernier mois ouvert
+  // Pré-remplissage depuis le dernier mois ouvert, et charges fixes du modèle
   let precedent = null;
+  let modele = [];
   const dernier = etat.donnees.moisDisponibles.find((c) => c < cle);
-  if (dernier) {
-    try {
-      precedent = await chargerMois(etat.foyer.id, dernier);
-    } catch (e) {
-      toast(e.message, {type: 'erreur'});
-    }
+  try {
+    [precedent, modele] = await Promise.all([
+      dernier ? chargerMois(etat.foyer.id, dernier) : null,
+      chargerRecurrentesModele(etat.foyer.id),
+    ]);
+  } catch (e) {
+    toast(e.message, {type: 'erreur'});
   }
 
   const champs = [];
   const btnValider = el('button', {class: 'btn-primaire', type: 'submit'}, 'Ouvrir le mois');
-  const majBouton = () => { btnValider.disabled = champs.some((c) => !c.lire().ok); };
+  const majBouton = () => {
+    btnValider.disabled = champs.some((c) => !c.lire().ok) || recu.lire() == null;
+    blocPrelevees.hidden = solde.lire().valeur == null;
+  };
   const nouveauChamp = (options) => {
     const c = champMontant({...options, surChange: majBouton});
     champs.push(c);
     return c;
   };
 
-  // Membres
-  const lignesMembres = etat.membres.map((m) => {
-    const avant = precedent?.membresMois.find((x) => x.membre_id === m.id);
-    const salaire = nouveauChamp({id: `salaire-${m.id}`, etiquette: 'Salaire touché',
-      valeur: avant?.salaire ?? m.salaire_defaut});
-    const solde = nouveauChamp({id: `solde-${m.id}`, etiquette: 'Solde actuel du compte', negatif: true, vide: 'null'});
-    return {
-      membre: m,
-      element: el('div', {class: 'carte formulaire'}, el('h2', {}, m.prenom), salaire.element, solde.element,
-        el('p', {class: 'attenue', style: {margin: 0}}, 'Le solde est une simple information : il n\'entre dans aucun calcul.')),
-      lire: () => ({membre_id: m.id, salaire: salaire.lire().valeur, solde: solde.lire().valeur}),
-    };
-  });
+  // Ma part : les autres membres rempliront la leur depuis l'onglet Budget
+  const moi = etat.moi;
+  const avant = precedent?.membresMois.find((x) => x.membre_id === moi.id);
+  const salaire = nouveauChamp({id: 'salaire', etiquette: 'Salaire', valeur: avant?.salaire ?? moi.salaire_defaut});
+  const aideSalaire = el('p', {class: 'attenue', style: {margin: 0}});
+  const blocSalaire = el('div', {class: 'formulaire', hidden: true}, salaire.element, aideSalaire);
+  const recu = choixOuiNon({etiquette: 'Ton salaire est déjà arrivé ?', non: 'Pas encore', surChange: (oui) => {
+    salaire.element.querySelector('label').textContent = oui ? 'Salaire reçu' : 'Salaire attendu';
+    aideSalaire.textContent = oui ? 'Il est déjà compris dans ton solde ci-dessous.' : 'Il sera ajouté à ton solde dans le calcul.';
+    blocSalaire.hidden = false;
+    majBouton();
+  }});
+  const solde = nouveauChamp({id: 'solde', etiquette: 'Solde actuel de ton compte', negatif: true, vide: 'null'});
+  const autres = etat.membres.filter((m) => m.id !== moi.id).map((m) => m.prenom);
 
   // Autres revenus
   const lignesRevenus = [];
@@ -59,26 +66,38 @@ export async function rendreOuverture(conteneur, {apres}) {
     const texte = el('input', {class: 'champ', id: `revenu-libelle-${idx}`, value: libelle, placeholder: 'Libellé',
       autocomplete: 'off', 'aria-label': 'Libellé du revenu'});
     const champ = nouveauChamp({id: `revenu-montant-${idx}`, valeur: montant, vide: 'zero'});
+    const dejaRecu = caseACocher({etiquette: 'Déjà sur le compte'});
     const ligne = {
       lire: () => {
-        const montant = champ.lire().valeur;
-        return {libelle: texte.value.trim() || (montant ? 'Autre revenu' : ''), montant};
+        const valeur = champ.lire().valeur;
+        return {libelle: texte.value.trim() || (valeur ? 'Autre revenu' : ''), montant: valeur, dans_solde: dejaRecu.lire()};
       },
-      element: el('div', {class: 'rangee', style: {alignItems: 'flex-start'}},
-        el('div', {style: {flex: '3'}}, texte),
-        el('div', {style: {flex: '2'}}, champ.element),
-        el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Retirer ce revenu', onclick: () => {
-          ligne.element.remove();
-          lignesRevenus.splice(lignesRevenus.indexOf(ligne), 1);
-          champs.splice(champs.indexOf(champ), 1);
-          majBouton();
-        }}, '✕')),
+      element: el('div', {class: 'ligne-revenu'},
+        el('div', {class: 'rangee', style: {alignItems: 'flex-start'}},
+          el('div', {style: {flex: '3'}}, texte),
+          el('div', {style: {flex: '2'}}, champ.element),
+          el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Retirer ce revenu', onclick: () => {
+            ligne.element.remove();
+            lignesRevenus.splice(lignesRevenus.indexOf(ligne), 1);
+            champs.splice(champs.indexOf(champ), 1);
+            majBouton();
+          }}, '✕')),
+        dejaRecu.element),
     };
     lignesRevenus.push(ligne);
     listeRevenus.append(ligne.element);
   };
   if (precedent?.revenus.length) precedent.revenus.forEach((r) => ajouterRevenu(r.libelle, r.montant));
   else REVENUS_PAR_DEFAUT.forEach((l) => ajouterRevenu(l));
+
+  // Charges déjà sorties du compte (n'apparaît qu'une fois un solde saisi)
+  const casesPrelevees = modele.map((r) => ({id: r.id, choix: caseACocher({
+    etiquette: `${r.icone ?? '📌'} ${r.libelle}`, detail: formatEUR(Number(r.montant))})}));
+  const blocPrelevees = el('div', {class: 'carte formulaire', hidden: true},
+    el('h2', {}, 'Charges déjà prélevées'),
+    el('p', {class: 'attenue', style: {margin: 0}},
+      'Coche celles qui sont déjà sorties du compte : elles sont comprises dans le solde et ne seront pas retirées une 2e fois.'),
+    casesPrelevees.map((c) => c.choix.element));
 
   // Objectifs actifs ce mois-ci
   const objectifs = etat.donnees.objectifs.filter((o) => !estArchive(o) && o.debut <= cle && cle <= o.fin);
@@ -107,17 +126,25 @@ export async function rendreOuverture(conteneur, {apres}) {
     e.preventDefault();
     message.textContent = '';
     const resultats = champs.map((c) => c.valider());
+    if (recu.lire() == null) {
+      message.textContent = 'Indique si ton salaire est déjà arrivé';
+      return;
+    }
     if (resultats.some((r) => !r.ok)) {
       message.textContent = 'Corrige les champs en rouge';
       majBouton();
       return;
     }
+    const avecSolde = solde.lire().valeur != null;
     btnValider.disabled = true;
     try {
-      await ouvrirMois(cle,
-        lignesMembres.map((l) => l.lire()),
-        lignesRevenus.map((l) => l.lire()).filter((r) => r.libelle),
-        lignesObjectifs.map((l) => l.lire()).filter((v) => v.montant));
+      const resultat = await ouvrirMois(cle,
+        [{membre_id: moi.id, salaire: salaire.lire().valeur, solde: solde.lire().valeur, salaire_dans_solde: recu.lire()}],
+        lignesRevenus.map((l) => l.lire()).filter((r) => r.libelle && r.montant > 0)
+          .map((r) => ({...r, dans_solde: avecSolde && r.dans_solde})),
+        lignesObjectifs.map((l) => l.lire()).filter((v) => v.montant),
+        avecSolde ? casesPrelevees.filter((c) => c.choix.lire()).map((c) => c.id) : []);
+      if (resultat && !resultat.cree) toast('Le mois était déjà ouvert : seule ta part a été ajoutée.');
       await recharger();
       apres();
     } catch (err) {
@@ -128,13 +155,21 @@ export async function rendreOuverture(conteneur, {apres}) {
 
   section.replaceChildren(
     el('h1', {}, titreOuverture(cle)),
-    el('p', {class: 'attenue'}, 'Nouveau mois : indiquez ce qui est arrivé sur les comptes.'),
+    el('p', {class: 'attenue'}, 'Nouveau mois : note ce qui est déjà arrivé sur les comptes, pour que rien ne soit compté deux fois.'),
     el('form', {class: 'formulaire', onsubmit: valider, novalidate: true},
-      lignesMembres.map((l) => l.element),
+      el('div', {class: 'carte formulaire'},
+        el('h2', {}, `Ta part · ${moi.prenom}`),
+        recu.element, blocSalaire, solde.element,
+        el('p', {class: 'attenue', style: {margin: 0}},
+          'Tes dépenses datées d\'avant aujourd\'hui sont considérées comme déjà sorties de ce solde.'),
+        autres.length
+          ? el('p', {class: 'attenue', style: {margin: 0}}, `${autres.join(' et ')} remplira sa part depuis l'onglet Budget.`)
+          : null),
       el('div', {class: 'carte formulaire'},
         el('h2', {}, 'Autres revenus du foyer'),
         listeRevenus,
         el('button', {class: 'btn-texte', type: 'button', onclick: () => ajouterRevenu()}, '+ Ajouter un revenu')),
+      blocPrelevees,
       lignesObjectifs.length ? el('h2', {}, 'Objectifs d\'épargne') : null,
       lignesObjectifs.map((l) => l.element),
       message,

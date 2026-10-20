@@ -1,5 +1,6 @@
 // Connexion / inscription, puis création ou adhésion à un foyer.
-import {connecter, inscrire, deconnecter, creerFoyer, rejoindreFoyer} from '../db.js';
+import {connecter, inscrire, deconnecter, creerFoyer, rejoindreFoyer, demanderReinitialisation, changerMotDePasse}
+  from '../db.js';
 import {el, toast} from '../ui.js';
 
 export function rendreConnexion(conteneur, {apres}) {
@@ -13,6 +14,20 @@ export function rendreConnexion(conteneur, {apres}) {
   const valider = el('button', {class: 'btn-primaire', type: 'submit'}, 'Se connecter');
   const aide = el('p', {class: 'attenue'});
 
+  const oubli = el('button', {class: 'btn-texte', type: 'button', onclick: async () => {
+    message.textContent = '';
+    const adresse = email.value.trim();
+    if (!adresse) { message.textContent = 'Indique ton email ci-dessus, puis touche « Mot de passe oublié »'; return; }
+    oubli.disabled = true;
+    try {
+      await demanderReinitialisation(adresse);
+      message.textContent = 'Lien envoyé : ouvre le mail reçu pour choisir un nouveau mot de passe.';
+    } catch (err) {
+      message.textContent = err.message;
+    } finally {
+      oubli.disabled = false;
+    }
+  }}, 'Mot de passe oublié ?');
   const btnConnexion = el('button', {type: 'button', onclick: () => changerMode('connexion')}, 'Se connecter');
   const btnInscription = el('button', {type: 'button', onclick: () => changerMode('inscription')}, 'Créer un compte');
 
@@ -25,6 +40,7 @@ export function rendreConnexion(conteneur, {apres}) {
     mdp.minLength = inscription ? 8 : 0;
     valider.textContent = inscription ? 'Créer mon compte' : 'Se connecter';
     aide.textContent = inscription ? '8 caractères minimum.' : '';
+    oubli.hidden = inscription;
     message.textContent = '';
   }
 
@@ -71,7 +87,35 @@ export function rendreConnexion(conteneur, {apres}) {
         el('div', {}, el('label', {class: 'etiquette', for: 'email'}, 'Email'), email),
         el('div', {}, el('label', {class: 'etiquette', for: 'mot-de-passe'}, 'Mot de passe'), mdp, aide),
         message,
-        valider)));
+        valider),
+      oubli));
+}
+
+// Après le lien « mot de passe oublié » : la session est ouverte, on choisit le nouveau mot de passe
+export function rendreNouveauMotDePasse(conteneur, {apres}) {
+  const mdp = el('input', {class: 'champ', type: 'password', id: 'nouveau-mdp', autocomplete: 'new-password', minlength: '8'});
+  const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
+  const valider = el('button', {class: 'btn-primaire', type: 'submit'}, 'Enregistrer');
+  conteneur.append(el('section', {class: 'ecran-connexion'},
+    el('h1', {}, 'Nouveau mot de passe'),
+    el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
+      e.preventDefault();
+      message.textContent = '';
+      if (mdp.value.length < 8) { message.textContent = 'Le mot de passe doit faire au moins 8 caractères'; return; }
+      valider.disabled = true;
+      try {
+        await changerMotDePasse(mdp.value);
+        toast('Mot de passe modifié');
+        apres();
+      } catch (err) {
+        message.textContent = err.message;
+        valider.disabled = false;
+      }
+    }},
+    el('div', {}, el('label', {class: 'etiquette', for: 'nouveau-mdp'}, 'Nouveau mot de passe'), mdp,
+      el('p', {class: 'attenue'}, '8 caractères minimum.')),
+    message, valider)));
+  mdp.focus();
 }
 
 export function rendreChoixFoyer(conteneur, {apres}) {
@@ -122,7 +166,7 @@ export function rendreChoixFoyer(conteneur, {apres}) {
     section.replaceChildren(
       el('h1', {}, 'Foyer créé'),
       el('div', {class: 'carte'},
-        el('p', {class: 'attenue', style: {textAlign: 'center', margin: 0}}, 'Votre code d\'invitation'),
+        el('p', {class: 'attenue', style: {textAlign: 'center', margin: 0}}, 'Ton code d\'invitation'),
         el('div', {class: 'code-invitation'}, valeur),
         el('button', {class: 'btn-secondaire', type: 'button', onclick: () => copier(valeur)}, 'Copier le code'),
         el('p', {class: 'attenue', style: {textAlign: 'center'}},
@@ -131,8 +175,8 @@ export function rendreChoixFoyer(conteneur, {apres}) {
   }
 
   section.append(
-    el('h1', {}, 'Votre foyer'),
-    el('p', {class: 'accroche'}, 'Créez le foyer, ou rejoignez celui de votre conjoint avec son code.'),
+    el('h1', {}, 'Ton foyer'),
+    el('p', {class: 'accroche'}, 'Crée le foyer, ou rejoins celui de l\'autre membre avec son code.'),
     el('form', {class: 'carte formulaire', onsubmit: creer},
       el('h2', {}, 'Créer notre foyer'),
       el('div', {}, el('label', {class: 'etiquette', for: 'prenom-creer'}, 'Ton prénom'), prenomCreer),

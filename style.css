@@ -482,6 +482,20 @@ button.ligne:active { background: var(--sable); }
     text-align: center;
 }
 
+.bandeau-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 10px 12px 10px 16px;
+    border-radius: var(--rayon);
+    background: var(--orange-f);
+    color: var(--orange-t);
+    font-weight: 600;
+}
+.bandeau-info > .btn-primaire { width: auto; flex: 0 0 auto; padding: 0 16px; }
+
 /* ── Connexion ───────────────────────────────────────────────────────── */
 
 .ecran-connexion { padding-top: 24px; }
@@ -603,3 +617,25 @@ details.repliable > summary {
 @media (min-width: 600px) {
     .grille-stats { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ── Cases à cocher ──────────────────────────────────────────────────── */
+
+.case {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 4px 0;
+    cursor: pointer;
+}
+.case > input {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--acc);
+}
+.case-texte { flex: 1; min-width: 0; }
+.case-detail { color: var(--attenue); font-size: 0.9rem; }
+.ligne-revenu + .ligne-revenu { border-top: 1px solid var(--filet); padding-top: 8px; }
+.carte-stat .lien-stat { margin-top: 6px; color: var(--acc-fonce); font-weight: 600; }

@@ -1,8 +1,9 @@
 // Onglet Récurrentes : charges fixes du mois et revue de début de mois par swipe.
-import {ajouterRecurrente, modifierRecurrente, retirerDuMois, restaurerDansMois, supprimerRecurrente} from '../db.js';
+import {ajouterRecurrente, modifierRecurrente, marquerPrelevee, retirerDuMois, restaurerDansMois, supprimerRecurrente}
+  from '../db.js';
 import {etat, recharger} from '../etat.js';
 import {formatEUR, libelleMois} from '../calc.js';
-import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
+import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
 
 const ICONES = ['🏡', '🏦', '⚡', '💧', '🛡️', '📱', '👶', '🍽️', '🧾', '🚗', '💡', '📺', '🏋️', '🐾', '💳', '📦'];
 const SEUIL_SWIPE = 100;
@@ -43,7 +44,8 @@ function rendreListe(conteneur) {
           el(lectureSeule ? 'div' : 'button', {class: 'ligne', type: lectureSeule ? null : 'button',
             onclick: lectureSeule ? null : () => ouvrirEdition(r)},
             el('span', {class: 'ligne-icone', 'aria-hidden': 'true'}, r.icone ?? '📌'),
-            el('span', {class: 'ligne-texte'}, el('div', {class: 'ligne-titre'}, r.libelle)),
+            el('span', {class: 'ligne-texte'}, el('div', {class: 'ligne-titre'}, r.libelle),
+              r.dans_solde ? el('div', {class: 'ligne-sous'}, 'Déjà prélevée') : null),
             el('span', {class: 'ligne-montant montant'}, formatEUR(Number(r.montant)))))))
       : el('p', {class: 'vide-liste'}, 'Aucune charge fixe ce mois-ci.'),
     lectureSeule ? null : el('div', {class: 'actions'},
@@ -63,6 +65,7 @@ function ouvrirEdition(ligne) {
   const libelle = el('input', {class: 'champ', id: 'recurrente-libelle', value: ligne?.libelle ?? '',
     autocomplete: 'off', required: true});
   const montant = champMontant({id: 'recurrente-montant', etiquette: 'Montant mensuel', valeur: ligne?.montant ?? null});
+  const prelevee = caseACocher({etiquette: 'Déjà prélevée quand le solde a été saisi', valeur: ligne?.dans_solde ?? false});
   const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
   const icones = el('div', {class: 'grille-choix icones'}, ICONES.map((i) =>
     el('button', {type: 'button', 'aria-pressed': String(i === icone), 'aria-label': `Icône ${i}`, onclick: (e) => {
@@ -93,14 +96,20 @@ function ouvrirEdition(ligne) {
     if (!m.ok) return;
     const champs = {libelle: libelle.value.trim(), icone, montant: m.valeur};
     executer(enregistrer,
-      () => (ligne ? modifierRecurrente(ligne, champs)
-                   : ajouterRecurrente(etat.foyer.id, etat.donnees.mois.id, champs)),
+      async () => {
+        if (!ligne) return ajouterRecurrente(etat.foyer.id, etat.donnees.mois.id, {...champs, dans_solde: prelevee.lire()});
+        await modifierRecurrente(ligne, champs);
+        if (prelevee.lire() !== Boolean(ligne.dans_solde)) await marquerPrelevee(ligne.id, prelevee.lire());
+      },
       ligne ? 'Charge modifiée' : 'Charge ajoutée');
   }},
   el('div', {}, el('label', {class: 'etiquette', for: 'recurrente-libelle'}, 'Libellé'), libelle),
   montant.element,
   el('div', {}, el('span', {class: 'etiquette'}, 'Icône'), icones),
-  el('p', {class: 'attenue', style: {margin: 0}}, 'La modification vaut pour ce mois et les mois suivants.'),
+  prelevee.element,
+  el('p', {class: 'attenue', style: {margin: 0}},
+    "Cochée, la charge est déjà comprise dans un solde : elle n'est pas retirée une 2e fois (ce mois seulement). "
+    + 'Le reste de la modification vaut aussi pour les mois suivants.'),
   message,
   enregistrer);
 

@@ -3,7 +3,7 @@ import {sb, session, surAuth, chargerFoyer, deconnecter} from './db.js';
 import {etat, abonner, recharger, rechargerEnFond, demarrerTempsReel, arreterTempsReel} from './etat.js';
 import {cleMois} from './calc.js';
 import {el, toast} from './ui.js';
-import {rendreConnexion, rendreChoixFoyer} from './vues/connexion.js';
+import {rendreConnexion, rendreChoixFoyer, rendreNouveauMotDePasse} from './vues/connexion.js';
 import {rendreOuverture} from './vues/ouverture.js';
 import {rendreRecurrentes} from './vues/recurrentes.js';
 import {rendreDepenses} from './vues/depenses.js';
@@ -79,6 +79,17 @@ function afficherErreurDemarrage(message) {
     el('button', {class: 'btn-primaire', type: 'button', onclick: demarrer}, 'Réessayer')));
 }
 
+// Retour du lien « mot de passe oublié » : on choisit le nouveau mot de passe avant tout le reste
+let recuperation = /type=recovery/.test(location.hash);
+
+function afficherRecuperation() {
+  afficherEcran((c) => rendreNouveauMotDePasse(c, {apres: () => {
+    recuperation = false;
+    history.replaceState(null, '', location.pathname);
+    demarrer();
+  }}));
+}
+
 let demarrage = null;
 function demarrer() {
   // Un seul démarrage à la fois (connexion + événement d'auth simultanés)
@@ -89,6 +100,10 @@ function demarrer() {
 async function lancer() {
   try {
     etat.session = await session();
+    if (recuperation && etat.session) {
+      afficherRecuperation();
+      return;
+    }
     if (!etat.session) {
       Object.assign(etat, {foyer: null, membres: [], moi: null, donnees: null});
       afficherEcran((c) => rendreConnexion(c, {apres: demarrer}));
@@ -116,7 +131,10 @@ async function lancer() {
 }
 
 surAuth((evenement) => {
-  if (evenement === 'SIGNED_OUT') {
+  if (evenement === 'PASSWORD_RECOVERY') {
+    recuperation = true;
+    afficherRecuperation();
+  } else if (evenement === 'SIGNED_OUT') {
     arreterTempsReel();
     demarrer();
   }

@@ -79,6 +79,29 @@ export function toast(message, {type = 'info'} = {}) {
   }, type === 'erreur' ? 4500 : 2800);
 }
 
+// Question oui / non en segment ; valeur null = pas encore répondu (aucun choix par défaut)
+export function choixOuiNon({etiquette, valeur = null, oui = 'Oui', non = 'Non', surChange} = {}) {
+  let choix = valeur;
+  const bouton = (v, texte) => el('button', {type: 'button', 'aria-pressed': String(choix === v), onclick: () => {
+    choix = v;
+    for (const b of segment.children) b.setAttribute('aria-pressed', String(b === (v ? btnOui : btnNon)));
+    surChange?.(choix);
+  }}, texte);
+  const btnOui = bouton(true, oui);
+  const btnNon = bouton(false, non);
+  const segment = el('div', {class: 'segment', role: 'group', 'aria-label': etiquette}, btnOui, btnNon);
+  const element = el('div', {}, el('span', {class: 'etiquette'}, etiquette), segment);
+  return {element, lire: () => choix};
+}
+
+// Case à cocher sur toute la largeur (cible tactile ≥ 44 px), avec un détail aligné à droite
+export function caseACocher({etiquette, detail = null, valeur = false, surChange} = {}) {
+  const input = el('input', {type: 'checkbox', checked: valeur, onchange: () => surChange?.(input.checked)});
+  const element = el('label', {class: 'case'}, input, el('span', {class: 'case-texte'}, etiquette),
+    detail ? el('span', {class: 'case-detail montant'}, detail) : null);
+  return {element, input, lire: () => input.checked};
+}
+
 // Écrit un nombre au format de saisie français (12.5 → "12,5")
 export const versSaisie = (n) => (n == null ? '' : String(n).replace('.', ','));
 

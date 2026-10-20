@@ -61,20 +61,68 @@ export function niveauBudget(budget, depense) {
   return 'ok';
 }
 
-export function syntheseMois({salaires = [], revenus = [], recurrentes = [], budgets = [], versements = []}) {
-  const totalRevenus = arrondi(somme(salaires) + somme(revenus));
-  const chargesFixes = somme(recurrentes);
-  const totalBudgets = somme(budgets);
-  const objectifs = somme(versements);
-  const resteLibre = arrondi(totalRevenus - chargesFixes - totalBudgets - objectifs);
+// Le solde saisi est le point de départ : on n'ajoute ou ne retire que ce qui n'y était pas encore.
+// membres    : [{membre_id, salaire, solde, solde_le, salaire_dans_solde}]
+// revenus    : [{montant, dans_solde}]        recurrentes : [{montant, dans_solde}]
+// budgets    : [{categorie_id, montant}]      depenses    : [{categorie_id, membre_id, montant, date}]
+// versements : [{montant}]
+// Une dépense est déjà déduite si son payeur a saisi un solde et qu'elle date d'avant ce solde.
+// Sans aucun solde saisi, les cases « déjà passé sur le compte » des revenus et charges sont ignorées.
+export function syntheseMois({membres = [], revenus = [], recurrentes = [], budgets = [], depenses = [], versements = []}) {
+  const avecSolde = membres.some((m) => m.solde != null);
+  const comptes = somme(membres.map((m) => m.solde));
+
+  const salaireAVenir = (m) => (m.salaire_dans_solde && m.solde != null ? 0 : Number(m.salaire) || 0);
+  const salaires = somme(membres.map((m) => m.salaire));
+  const salairesARecevoir = somme(membres.map(salaireAVenir));
+  const autresRevenus = somme(revenus.map((r) => r.montant));
+  const revenusARecevoir = somme(revenus.filter((r) => !(avecSolde && r.dans_solde)).map((r) => r.montant));
+
+  const chargesFixes = somme(recurrentes.map((r) => r.montant));
+  const chargesAPrelever = somme(recurrentes.filter((r) => !(avecSolde && r.dans_solde)).map((r) => r.montant));
+
+  // Par catégorie : on prévoit le plus grand du budget et du dépensé, moins ce qui est déjà sorti du compte
+  const dateSolde = new Map(membres.filter((m) => m.solde != null && m.solde_le).map((m) => [m.membre_id, m.solde_le]));
+  const dejaDeduite = (d) => dateSolde.has(d.membre_id) && d.date < dateSolde.get(d.membre_id);
+  const parCategorie = new Map();
+  const ligne = (id) => parCategorie.get(id) ?? parCategorie.set(id, {budget: 0, depense: 0, deduit: 0}).get(id);
+  for (const b of budgets) ligne(b.categorie_id).budget += Number(b.montant) || 0;
+  for (const d of depenses) {
+    const l = ligne(d.categorie_id);
+    l.depense += Number(d.montant) || 0;
+    if (dejaDeduite(d)) l.deduit += Number(d.montant) || 0;
+  }
+  const lignes = [...parCategorie.values()];
+  const budgetsTotal = somme(budgets.map((b) => b.montant));
+  const budgetsPrevus = somme(lignes.map((l) => Math.max(l.budget, l.depense)));
+  const depensesDeduites = somme(lignes.map((l) => l.deduit));
+  const budgetsAVenir = arrondi(budgetsPrevus - depensesDeduites);
+
+  const objectifs = somme(versements.map((v) => v.montant));
+  const disponible = arrondi(comptes + salairesARecevoir + revenusARecevoir);
+  const resteLibre = arrondi(disponible - chargesAPrelever - budgetsAVenir - objectifs);
   return {
-    revenus: totalRevenus,
-    chargesFixes,
-    budgets: totalBudgets,
-    objectifs,
-    resteLibre,
-    pctResteLibre: totalRevenus > 0 ? arrondi((resteLibre / totalRevenus) * 100) : null,
+    comptes, salaires, salairesARecevoir, autresRevenus, revenusARecevoir, disponible,
+    chargesFixes, chargesAPrelever,
+    budgets: budgetsTotal, budgetsPrevus, depensesDeduites, budgetsAVenir,
+    objectifs, resteLibre,
+    pctResteLibre: disponible > 0 ? arrondi((resteLibre / disponible) * 100) : null,
   };
+}
+
+// Bilan d'un mois terminé : budgets prévus, dépensé, catégories dépassées (de la plus dépassée à la moins)
+export function bilanMois({budgets = [], depenses = []}) {
+  const parCategorie = new Map();
+  const ligne = (id) => parCategorie.get(id) ?? parCategorie.set(id, {categorie_id: id, budget: 0, depense: 0}).get(id);
+  for (const b of budgets) ligne(b.categorie_id).budget += Number(b.montant) || 0;
+  for (const d of depenses) ligne(d.categorie_id).depense += Number(d.montant) || 0;
+  const lignes = [...parCategorie.values()].map((l) => ({...l, budget: arrondi(l.budget), depense: arrondi(l.depense)}));
+  const prevu = somme(lignes.map((l) => l.budget));
+  const depense = somme(lignes.map((l) => l.depense));
+  const depassements = lignes.filter((l) => l.depense > l.budget)
+    .map((l) => ({...l, ecart: arrondi(l.depense - l.budget)}))
+    .sort((x, y) => y.ecart - x.ecart);
+  return {prevu, depense, ecart: arrondi(prevu - depense), depassements};
 }
 
 export function depensesParCategorie(depenses) {

@@ -10,10 +10,13 @@ Guide pour Claude Code : architecture, commandes, conventions.
 Coquille : `#vue`, barre d'onglets `#onglets`, bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
 
 ## style.css
-Jetons terracotta (`:root`) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques.
+Jetons terracotta (`:root`) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques, bandeaux.
 
 ## manifest.json
-Métadonnées PWA « Budget familial » (couleurs crème / terracotta).
+Métadonnées PWA « Budget familial » (couleurs crème / terracotta), icônes 192 et 512.
+
+## icones/
+Icônes de l'app (favicon, apple-touch-icon 180, 192, 512) : € crème sur terracotta.
 
 ## package.json
 Script `npm test` uniquement (aucune dépendance).
@@ -30,7 +33,8 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - nbMois(debut, fin) — nombre de mois, bornes incluses
 - libelleMois(cle) — « octobre 2026 »
 - niveauBudget(budget, depense) — vide / ok / alerte / dépassé
-- syntheseMois({salaires, revenus, recurrentes, budgets, versements}) — cartes et reste libre
+- syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements}) — disponible, à venir, reste libre, sans doublon
+- bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
 - depensesParCategorie(depenses) — total et part par membre
 - totalParMembre(depenses) — total dépensé par membre
 - topPostes(postes, n) — n plus gros postes + « Autres »
@@ -42,6 +46,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - session() / surAuth(cb) — session courante, écoute de l'auth
 - connecter / inscrire / deconnecter — email et mot de passe
+- demanderReinitialisation(email) / changerMotDePasse(mdp) — mot de passe oublié
 - chargerFoyer() — foyer, membres et membre courant
 - creerFoyer(prenom) / rejoindreFoyer(code, prenom) — RPC foyer
 - chargerMois(foyerId, cle) — mois, revenus, récurrentes, budgets, dépenses, versements
@@ -49,13 +54,18 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - chargerCategories(foyerId) — catégories actives et inactives
 - chargerObjectifs(foyerId) — objectifs et tous les versements
 - ecouter(foyerId, cb) — abonnement Realtime aux tables publiées
-- ouvrirMois(cle, membres, revenus, versements) — RPC idempotente d'ouverture
+- ouvrirMois(cle, membres, revenus, versements, prelevees) — RPC d'ouverture, renvoie {mois_id, cree}
+- chargerRecurrentesModele(foyerId) — charges fixes actives du modèle
 - ajouterRecurrente / modifierRecurrente — mois et modèle ensemble
+- marquerPrelevee(ligneMoisId, dansSolde) — charge déjà dans le solde
 - retirerDuMois / restaurerDansMois — retrait du mois seulement, annulation
 - supprimerRecurrente(ligne) — retire du mois, désactive le modèle
+- ajouterRevenu / modifierRevenu / supprimerRevenu — autres revenus du mois
 - ajouterDepense / modifierDepense / supprimerDepense — dépenses ponctuelles
 - modifierBudget(foyerId, moisId, categorieId, montant) — budget du mois et défaut
-- modifierMoisMembre(foyerId, moisId, membreId, {salaire, solde}) — salaire du mois (upsert)
+- creerCategorie / modifierCategorie / activerCategorie — catégories (jamais supprimées)
+- modifierProfil(membreId, {prenom, salaire_defaut}) — profil du membre
+- modifierMoisMembre(foyerId, moisId, membreId, champs) — part du mois d'un membre (upsert partiel)
 - creerObjectif / modifierObjectif / archiverObjectif — objectifs d'épargne
 - ajouterVersement / supprimerVersement — versements (retrait = négatif)
 
@@ -75,6 +85,8 @@ Helpers DOM (jamais d'innerHTML pour des données utilisateur).
 - toast(message, {type}) — message temporaire
 - versSaisie(n) — nombre au format de saisie
 - champMontant(options) — champ montant validé en direct
+- choixOuiNon({etiquette, valeur, oui, non, surChange}) — segment oui / non sans défaut
+- caseACocher({etiquette, detail, valeur, surChange}) — case pleine largeur
 
 ## js/app.js
 Démarrage et routage : connexion → foyer → ouverture du mois → onglets ; redémarre si le mois a changé.
@@ -83,16 +95,17 @@ Démarrage et routage : connexion → foyer → ouverture du mois → onglets ; 
 
 ## js/vues/connexion.js
 Connexion / inscription, création ou adhésion au foyer.
-- rendreConnexion(conteneur, {apres}) — formulaire compatible trousseau iCloud
+- rendreConnexion(conteneur, {apres}) — formulaire compatible trousseau iCloud, mot de passe oublié
+- rendreNouveauMotDePasse(conteneur, {apres}) — retour du lien de réinitialisation
 - rendreChoixFoyer(conteneur, {apres}) — créer ou rejoindre un foyer
 - copier(texte) — copie dans le presse-papiers
 
 ## js/vues/ouverture.js
-Ouverture du mois : salaires, soldes (info), revenus, versements proposés.
+Ouverture du mois : sa propre part (salaire, solde), revenus déjà reçus, charges déjà prélevées, versements.
 - rendreOuverture(conteneur, {apres}) — formulaire d'ouverture du mois
 
 ## js/vues/recurrentes.js
-Onglet Récurrentes et revue de début de mois par swipe.
+Onglet Récurrentes (case « déjà prélevée ») et revue de début de mois par swipe.
 - rendreRecurrentes(conteneur, {revue}) — liste ou revue par swipe
 
 ## js/vues/depenses.js
@@ -107,8 +120,17 @@ Bouton « + » flottant.
 - initAjoutRapide(bouton) — ouvre la feuille de saisie rapide
 
 ## js/vues/tableau.js
-Onglet Budget : cartes, budgets par catégorie, par personne (salaire modifiable), graphiques SVG.
+Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, par personne, graphiques SVG.
 - rendreTableau(conteneur) — tableau de bord du mois affiché
+- bandeaux() / confirmerSalaire(membre, mm) — part à remplir, salaire reçu ?
+- editerMembre(membre, mm) — salaire, solde daté, déjà dans le solde
+- bilan() — bilan d'un mois passé
+
+## js/vues/reglages.js
+Feuilles ouvertes depuis l'onglet Budget.
+- ouvrirRevenus() — autres revenus du mois
+- ouvrirCategories() — créer, renommer, désactiver
+- ouvrirProfil() — prénom et salaire habituel
 
 ## js/vues/objectifs.js
 Onglet Objectifs : suivi, versements / retraits, archives.
@@ -129,6 +151,12 @@ RPC `security definer`.
 
 ## supabase/migrations/004_temps_reel.sql
 Publie toutes les tables partagées du foyer dans Realtime.
+
+## supabase/migrations/005_solde_dans_calcul.sql
+`mois_membres.salaire_dans_solde` (calcul) et `salaire_recu` (affichage) ; `ouvrir_mois` les renseigne.
+
+## supabase/migrations/006_aucun_doublon.sql
+`dans_solde` sur revenus et charges du mois, `solde_le` et `renseigne` sur `mois_membres` ; `ouvrir_mois` (5 paramètres) renvoie `{mois_id, cree}`.
 
 ## supabase/tests/rls_et_rpc.sql
 Test SQL (begin … rollback) : RLS, RPC, mois sautés, contraintes.
