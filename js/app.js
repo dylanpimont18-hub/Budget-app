@@ -7,6 +7,7 @@ import {rendreConnexion, rendreChoixFoyer} from './vues/connexion.js';
 import {rendreOuverture} from './vues/ouverture.js';
 import {rendreRecurrentes} from './vues/recurrentes.js';
 import {rendreDepenses} from './vues/depenses.js';
+import {initAjoutRapide} from './vues/ajout-rapide.js';
 
 const vue = document.getElementById('vue');
 const nav = document.getElementById('onglets');
@@ -55,6 +56,7 @@ nav.addEventListener('click', (e) => {
 });
 
 abonner(() => rendreOngletActif());
+initAjoutRapide(btnAjout);
 
 // ── Hors ligne ─────────────────────────────────────────────────────────
 const bandeau = document.getElementById('hors-ligne');
