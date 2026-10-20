@@ -1,6 +1,7 @@
 // Démarrage et routage : connexion → foyer → ouverture du mois → onglets.
 import {sb, session, surAuth, chargerFoyer, deconnecter} from './db.js';
-import {etat, abonner} from './etat.js';
+import {etat, abonner, recharger, rechargerEnFond, demarrerTempsReel, arreterTempsReel} from './etat.js';
+import {cleMois} from './calc.js';
 import {el, toast} from './ui.js';
 import {rendreConnexion, rendreChoixFoyer} from './vues/connexion.js';
 
@@ -93,14 +94,36 @@ async function lancer() {
       return;
     }
     Object.assign(etat, foyer);
+
+    etat.moisCourantCle = cleMois();
+    etat.moisCle = etat.moisCourantCle;
+    await recharger();
+    demarrerTempsReel();
+    if (!etat.donnees.mois) {
+      afficherEcran(rendreOuvertureProvisoire);
+      return;
+    }
     afficherOnglet('tableau');
   } catch (e) {
     afficherErreurDemarrage(e.message);
   }
 }
 
+// Provisoire : remplacé par la vue d'ouverture du mois (Task 6)
+function rendreOuvertureProvisoire(c) {
+  c.append(el('h1', {}, 'Ouverture du mois'));
+}
+
 surAuth((evenement) => {
-  if (evenement === 'SIGNED_OUT') demarrer();
+  if (evenement === 'SIGNED_OUT') {
+    arreterTempsReel();
+    demarrer();
+  }
+});
+
+// Au retour au premier plan (iPhone), on resynchronise : le temps réel a pu être coupé
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && etat.foyer && etat.donnees) rechargerEnFond();
 });
 
 // Accès console pour le débogage

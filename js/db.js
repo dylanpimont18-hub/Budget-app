@@ -2,6 +2,7 @@
 // Chaque fonction lève une Error au message en français si Supabase renvoie une erreur.
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import {SUPABASE_URL, SUPABASE_ANON_KEY} from './config.js';
+import {decalerMois} from './calc.js';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: true},
@@ -109,4 +110,81 @@ export async function creerFoyer(prenom) {
 
 export async function rejoindreFoyer(code, prenom) {
   return verifierRpc(await sb.rpc('rejoindre_foyer', {p_code: code, p_prenom: prenom}), 'Impossible de rejoindre le foyer.');
+}
+
+// ── Données du mois ────────────────────────────────────────────────────
+
+export async function chargerMois(foyerId, cle) {
+  const [mois, depenses, versements] = await Promise.all([
+    sb.from('mois').select('id, cle').eq('foyer_id', foyerId).eq('cle', cle).maybeSingle(),
+    sb.from('depenses').select('id, date, montant, categorie_id, membre_id, libelle')
+      .eq('foyer_id', foyerId).gte('date', `${cle}-01`).lt('date', `${decalerMois(cle, 1)}-01`)
+      .order('date', {ascending: false}).order('cree_le', {ascending: false}),
+    sb.from('versements').select('id, objectif_id, mois_cle, montant, membre_id')
+      .eq('foyer_id', foyerId).eq('mois_cle', cle).order('cree_le'),
+  ]);
+  const donnees = {
+    mois: verifier(mois, 'Impossible de charger le mois.'),
+    membresMois: [],
+    revenus: [],
+    recurrentes: [],
+    budgets: [],
+    depenses: verifier(depenses, 'Impossible de charger les dépenses.'),
+    versements: verifier(versements, 'Impossible de charger les versements.'),
+  };
+  if (!donnees.mois) return donnees;
+
+  const id = donnees.mois.id;
+  const [membresMois, revenus, recurrentes, budgets] = await Promise.all([
+    sb.from('mois_membres').select('membre_id, salaire, solde').eq('mois_id', id),
+    sb.from('revenus_mois').select('id, libelle, montant').eq('mois_id', id).order('libelle'),
+    sb.from('recurrentes_mois').select('id, recurrente_id, libelle, icone, montant, ordre').eq('mois_id', id)
+      .order('ordre').order('libelle'),
+    sb.from('budgets_mois').select('categorie_id, montant').eq('mois_id', id),
+  ]);
+  donnees.membresMois = verifier(membresMois, 'Impossible de charger les salaires.');
+  donnees.revenus = verifier(revenus, 'Impossible de charger les revenus.');
+  donnees.recurrentes = verifier(recurrentes, 'Impossible de charger les charges fixes.');
+  donnees.budgets = verifier(budgets, 'Impossible de charger les budgets.');
+  return donnees;
+}
+
+// Clés des mois ouverts, du plus récent au plus ancien
+export async function listerMois(foyerId) {
+  const lignes = verifier(await sb.from('mois').select('cle').eq('foyer_id', foyerId).order('cle', {ascending: false}),
+    'Impossible de lister les mois.');
+  return lignes.map((l) => l.cle);
+}
+
+// Actives et inactives (les dépenses passées gardent leur catégorie)
+export async function chargerCategories(foyerId) {
+  return verifier(await sb.from('categories').select('*').eq('foyer_id', foyerId).order('ordre').order('nom'),
+    'Impossible de charger les catégories.');
+}
+
+export async function chargerObjectifs(foyerId) {
+  const [objectifs, versements] = await Promise.all([
+    sb.from('objectifs').select('*').eq('foyer_id', foyerId).order('cree_le'),
+    sb.from('versements').select('id, objectif_id, mois_cle, montant, membre_id, cree_le')
+      .eq('foyer_id', foyerId).order('mois_cle').order('cree_le'),
+  ]);
+  return {
+    objectifs: verifier(objectifs, 'Impossible de charger les objectifs.'),
+    versements: verifier(versements, 'Impossible de charger les versements.'),
+  };
+}
+
+// ── Temps réel ─────────────────────────────────────────────────────────
+
+const TABLES_TEMPS_REEL = ['depenses', 'versements', 'mois', 'budgets_mois', 'recurrentes_mois'];
+
+export function ecouter(foyerId, cb) {
+  const canal = sb.channel(`foyer-${foyerId}`);
+  for (const table of TABLES_TEMPS_REEL) {
+    canal.on('postgres_changes', {event: '*', schema: 'public', table, filter: `foyer_id=eq.${foyerId}`}, cb);
+    // Les suppressions ne sont pas filtrables côté Realtime : on les écoute à part
+    canal.on('postgres_changes', {event: 'DELETE', schema: 'public', table}, cb);
+  }
+  canal.subscribe();
+  return () => sb.removeChannel(canal);
 }

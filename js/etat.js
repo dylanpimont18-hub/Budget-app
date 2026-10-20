@@ -1,4 +1,6 @@
-// Store : état courant de l'app et notification des vues.
+// Store : état courant de l'app, rechargement depuis Supabase et temps réel.
+import {chargerFoyer, chargerMois, chargerCategories, chargerObjectifs, listerMois, ecouter} from './db.js';
+import {toast} from './ui.js';
 
 export const etat = {
   session: null,
@@ -21,6 +23,50 @@ export function notifier() {
   for (const fn of abonnes) fn(etat);
 }
 
+// Recharge tout ce qu'affichent les vues pour etat.moisCle
 export async function recharger() {
+  const foyerId = etat.foyer.id;
+  const [foyer, mois, categories, objectifs, moisDisponibles] = await Promise.all([
+    chargerFoyer(),
+    chargerMois(foyerId, etat.moisCle),
+    chargerCategories(foyerId),
+    chargerObjectifs(foyerId),
+    listerMois(foyerId),
+  ]);
+  if (foyer) Object.assign(etat, foyer);
+  etat.donnees = {
+    ...mois,
+    categories,
+    objectifs: objectifs.objectifs,
+    versementsTous: objectifs.versements,
+    moisDisponibles,
+  };
   notifier();
+}
+
+export async function changerMois(cle) {
+  etat.moisCle = cle;
+  await recharger();
+}
+
+// Recharge en tâche de fond, en signalant l'erreur sans bloquer
+export function rechargerEnFond() {
+  recharger().catch((e) => toast(e.message, {type: 'erreur'}));
+}
+
+let desabonnerTempsReel = null;
+let minuteur = null;
+
+export function demarrerTempsReel() {
+  arreterTempsReel();
+  desabonnerTempsReel = ecouter(etat.foyer.id, () => {
+    clearTimeout(minuteur);
+    minuteur = setTimeout(rechargerEnFond, 300);
+  });
+}
+
+export function arreterTempsReel() {
+  clearTimeout(minuteur);
+  desabonnerTempsReel?.();
+  desabonnerTempsReel = null;
 }
