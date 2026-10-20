@@ -1,10 +1,10 @@
 {
-  "name": "Comptes Communs",
-  "short_name": "Comptes",
+  "name": "Budget familial",
+  "short_name": "Budget",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f4f4f6",
-  "theme_color": "#ffffff",
+  "background_color": "#FBF6F1",
+  "theme_color": "#C0653F",
   "icons": [
     {
       "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/account_balance_wallet/materialicons/144dpi/1_x/ic_account_balance_wallet_black_48dp.png",
