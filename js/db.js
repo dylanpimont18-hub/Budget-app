@@ -188,3 +188,13 @@ export function ecouter(foyerId, cb) {
   canal.subscribe();
   return () => sb.removeChannel(canal);
 }
+
+// ── Ouverture du mois ──────────────────────────────────────────────────
+
+// membres: [{membre_id, salaire, solde}], revenus: [{libelle, montant}], versements: [{objectif_id, montant, membre_id}]
+// Si le mois existe déjà (ouvert par l'autre membre), renvoie son id sans rien modifier.
+export async function ouvrirMois(cle, membres, revenus, versements) {
+  return verifierRpc(await sb.rpc('ouvrir_mois', {
+    p_cle: cle, p_membres: membres, p_revenus: revenus, p_versements: versements,
+  }), 'Ouverture du mois impossible.');
+}
