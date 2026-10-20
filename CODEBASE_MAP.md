@@ -40,7 +40,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - topPostes(postes, n) — n plus gros postes + « Autres »
 - effortMensuel(cible, debut, fin) — cible divisée par nombre de mois
 - cibleDepuisMensuel(mensuel, nbMois) — cible depuis un montant mensuel
-- suiviObjectif(objectif, versements, moisCourant) — versé, prévu, statut, mois restants
+- suiviObjectif(objectif, versements, moisCourant) — versé, prévu (mois en cours dû après versement), statut
 
 ## js/db.js
 Client Supabase et toutes les requêtes ; lève des erreurs en français.
@@ -56,8 +56,8 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - ecouter(foyerId, cb) — abonnement Realtime aux tables publiées
 - ouvrirMois(cle, membres, revenus, versements, prelevees) — RPC d'ouverture, renvoie {mois_id, cree}
 - chargerRecurrentesModele(foyerId) — charges fixes actives du modèle
-- ajouterRecurrente / modifierRecurrente — mois et modèle ensemble
-- marquerPrelevee(ligneMoisId, dansSolde) — charge déjà dans le solde
+- ajouterRecurrente / modifierRecurrente — mois et modèle (variable, payeur, déjà prélevée)
+- confirmerMontant(ligneMois, montant) — montant réel d'une charge variable
 - retirerDuMois / restaurerDansMois — retrait du mois seulement, annulation
 - supprimerRecurrente(ligne) — retire du mois, désactive le modèle
 - ajouterRevenu / modifierRevenu / supprimerRevenu — autres revenus du mois
@@ -101,12 +101,13 @@ Connexion / inscription, création ou adhésion au foyer.
 - copier(texte) — copie dans le presse-papiers
 
 ## js/vues/ouverture.js
-Ouverture du mois : sa propre part (salaire, solde), revenus déjà reçus, charges déjà prélevées, versements.
+Ouverture du mois : sa propre part (salaire, solde), revenus déjà reçus, versements (les charges passent ensuite en revue).
 - rendreOuverture(conteneur, {apres}) — formulaire d'ouverture du mois
 
 ## js/vues/recurrentes.js
-Onglet Récurrentes (case « déjà prélevée ») et revue de début de mois par swipe.
-- rendreRecurrentes(conteneur, {revue}) — liste ou revue par swipe
+Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue par swipe (montant, déjà prélevée).
+- rendreRecurrentes(conteneur, {revue}) — liste groupée ou revue par swipe
+- ouvrirConfirmation(ligne) — saisir le montant d'une charge variable
 
 ## js/vues/depenses.js
 Onglet Dépenses, historique mensuel, formulaire de dépense partagé.
@@ -122,9 +123,9 @@ Bouton « + » flottant.
 ## js/vues/tableau.js
 Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, par personne, graphiques SVG.
 - rendreTableau(conteneur) — tableau de bord du mois affiché
-- bandeaux() / confirmerSalaire(membre, mm) — part à remplir, salaire reçu ?
+- bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?
 - editerMembre(membre, mm) — salaire, solde daté, déjà dans le solde
-- bilan() — bilan d'un mois passé
+- bilan() — bilan d'un mois passé (remplace la prévision)
 
 ## js/vues/reglages.js
 Feuilles ouvertes depuis l'onglet Budget.
@@ -157,6 +158,9 @@ Publie toutes les tables partagées du foyer dans Realtime.
 
 ## supabase/migrations/006_aucun_doublon.sql
 `dans_solde` sur revenus et charges du mois, `solde_le` et `renseigne` sur `mois_membres` ; `ouvrir_mois` (5 paramètres) renvoie `{mois_id, cree}`.
+
+## supabase/migrations/007_charges_variables_perso.sql
+`variable` et `membre_id` sur les récurrentes (modèle et mois), `a_confirmer` sur le mois ; `ouvrir_mois` les recopie.
 
 ## supabase/tests/rls_et_rpc.sql
 Test SQL (begin … rollback) : RLS, RPC, mois sautés, contraintes.

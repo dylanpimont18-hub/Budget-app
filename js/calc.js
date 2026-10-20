@@ -162,7 +162,9 @@ export function cibleDepuisMensuel(mensuel, nbMoisTotal) {
 export function suiviObjectif({cible, debut, fin}, versements, moisCourant) {
   const verse = somme(versements.map((v) => v.montant));
   const effort = effortMensuel(cible, debut, fin);
-  const moisEcoules = Math.min(nbMois(debut, fin), nbMois(debut, moisCourant));
+  // Le mois en cours n'est dû qu'une fois un versement fait ce mois-ci : un objectif tout juste créé est « à jour »
+  const verseCeMois = versements.some((v) => v.mois_cle === moisCourant);
+  const moisEcoules = Math.max(0, Math.min(nbMois(debut, fin), nbMois(debut, moisCourant) - (verseCeMois ? 0 : 1)));
   const prevu = Math.min(cible, arrondi(effort * moisEcoules));
 
   let statut;

@@ -149,7 +149,8 @@ export async function chargerMois(foyerId, cle) {
   const [membresMois, revenus, recurrentes, budgets] = await Promise.all([
     sb.from('mois_membres').select('membre_id, salaire, solde, solde_le, salaire_dans_solde, salaire_recu, renseigne').eq('mois_id', id),
     sb.from('revenus_mois').select('id, libelle, montant, dans_solde').eq('mois_id', id).order('libelle'),
-    sb.from('recurrentes_mois').select('id, recurrente_id, libelle, icone, montant, ordre, dans_solde').eq('mois_id', id)
+    sb.from('recurrentes_mois')
+      .select('id, recurrente_id, libelle, icone, montant, ordre, dans_solde, variable, a_confirmer, membre_id').eq('mois_id', id)
       .order('ordre').order('libelle'),
     sb.from('budgets_mois').select('categorie_id, montant').eq('mois_id', id),
   ]);
@@ -216,7 +217,7 @@ export async function ouvrirMois(cle, membres, revenus, versements, prelevees) {
 
 // Charges fixes actives du modèle (proposées à l'ouverture)
 export async function chargerRecurrentesModele(foyerId) {
-  return verifier(await sb.from('recurrentes').select('id, libelle, icone, montant')
+  return verifier(await sb.from('recurrentes').select('id, libelle, icone, montant, variable, membre_id')
     .eq('foyer_id', foyerId).eq('active', true).order('ordre').order('libelle'),
   'Impossible de charger les charges fixes.');
 }
@@ -224,21 +225,36 @@ export async function chargerRecurrentesModele(foyerId) {
 // ── Charges fixes (récurrentes) ────────────────────────────────────────
 // Chaque modification touche la ligne du mois et le modèle utilisé pour les mois suivants.
 
-export async function ajouterRecurrente(foyerId, moisId, {libelle, icone, montant, ordre = 99, dans_solde = false}) {
+// membre_id : charge personnelle de ce membre (null = commune) ; variable : montant à confirmer chaque mois
+export async function ajouterRecurrente(foyerId, moisId,
+  {libelle, icone, montant, ordre = 99, dans_solde = false, variable = false, membre_id = null}) {
   const modele = verifier(await sb.from('recurrentes')
-    .insert({foyer_id: foyerId, libelle, icone, montant, ordre}).select('id').single(),
+    .insert({foyer_id: foyerId, libelle, icone, montant, ordre, variable, membre_id}).select('id').single(),
   'Impossible d\'ajouter la charge.');
-  verifier(await sb.from('recurrentes_mois')
-    .insert({foyer_id: foyerId, mois_id: moisId, recurrente_id: modele.id, libelle, icone, montant, ordre, dans_solde}),
+  verifier(await sb.from('recurrentes_mois').insert({foyer_id: foyerId, mois_id: moisId, recurrente_id: modele.id,
+    libelle, icone, montant, ordre, dans_solde, variable, membre_id}),
   'Charge ajoutée au modèle, mais pas à ce mois-ci.');
 }
 
-export async function modifierRecurrente(ligneMois, {libelle, icone, montant}) {
-  verifier(await sb.from('recurrentes_mois').update({libelle, icone, montant}).eq('id', ligneMois.id),
-    'Impossible de modifier la charge.');
+// Le mois reçoit tout ; le modèle garde libellé, icône, montant (proposé le mois suivant), variable et payeur.
+// dans_solde ne concerne que ce mois. Enregistrer un montant le confirme.
+export async function modifierRecurrente(ligneMois, {libelle, icone, montant, variable, membre_id, dans_solde}) {
+  verifier(await sb.from('recurrentes_mois')
+    .update({libelle, icone, montant, variable, membre_id, dans_solde, a_confirmer: false}).eq('id', ligneMois.id),
+  'Impossible de modifier la charge.');
   if (ligneMois.recurrente_id) {
-    verifier(await sb.from('recurrentes').update({libelle, icone, montant}).eq('id', ligneMois.recurrente_id),
+    verifier(await sb.from('recurrentes').update({libelle, icone, montant, variable, membre_id}).eq('id', ligneMois.recurrente_id),
       'Charge modifiée pour ce mois, mais pas pour les mois suivants.');
+  }
+}
+
+// Montant réel d'une charge variable pour ce mois (et proposé le mois suivant)
+export async function confirmerMontant(ligneMois, montant) {
+  verifier(await sb.from('recurrentes_mois').update({montant, a_confirmer: false}).eq('id', ligneMois.id),
+    'Impossible d\'enregistrer le montant.');
+  if (ligneMois.recurrente_id) {
+    verifier(await sb.from('recurrentes').update({montant}).eq('id', ligneMois.recurrente_id),
+      'Montant enregistré pour ce mois, mais pas proposé le mois prochain.');
   }
 }
 
@@ -249,16 +265,11 @@ export async function retirerDuMois(ligneMoisId) {
 
 // Annule un retrait : remet la ligne telle qu'elle était
 export async function restaurerDansMois(foyerId, moisId, ligne) {
-  const {id, recurrente_id, libelle, icone, montant, ordre, dans_solde = false} = ligne;
-  verifier(await sb.from('recurrentes_mois')
-    .insert({id, foyer_id: foyerId, mois_id: moisId, recurrente_id, libelle, icone, montant, ordre, dans_solde}),
+  const {id, recurrente_id, libelle, icone, montant, ordre, dans_solde = false, variable = false, a_confirmer = false,
+    membre_id = null} = ligne;
+  verifier(await sb.from('recurrentes_mois').insert({id, foyer_id: foyerId, mois_id: moisId, recurrente_id, libelle, icone,
+    montant, ordre, dans_solde, variable, a_confirmer, membre_id}),
   'Impossible de restaurer la charge.');
-}
-
-// Déjà prélevée quand le solde a été saisi (ce mois seulement)
-export async function marquerPrelevee(ligneMoisId, dansSolde) {
-  verifier(await sb.from('recurrentes_mois').update({dans_solde: dansSolde}).eq('id', ligneMoisId),
-    'Impossible de modifier la charge.');
 }
 
 // Supprime du mois et désactive dans le modèle

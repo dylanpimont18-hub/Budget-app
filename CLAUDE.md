@@ -43,6 +43,8 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
   starting point; add only what is not in it yet (salary unless `salaire_dans_solde`, other income unless
   `revenus_mois.dans_solde`), subtract only what has not left yet (charges unless `recurrentes_mois.dans_solde`,
   max(budget, spent) minus the payer's expenses dated before `solde_le`, goal transfers). `salaire_recu` is display only.
+- Recurring charges can be personal (`membre_id`, null = shared) and variable (`variable`: each new month copies the
+  last amount with `a_confirmer = true` until it is entered).
 - Each member fills in their own part of the month (`mois_membres.renseigne`); `ouvrir_mois` returns `{mois_id, cree}`
   and adds the caller's part if the month already exists.
 - Address the user with « tu » everywhere in the UI.

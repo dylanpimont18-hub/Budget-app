@@ -145,7 +145,7 @@ export function rendreDepenses(conteneur) {
     el('div', {class: 'segment', style: {marginBottom: '4px'}}, btnMode('date', 'Par date'), btnMode('categorie', 'Par catégorie')));
 
   if (!depenses.length) {
-    conteneur.append(el('p', {class: 'vide-liste'}, 'Aucune dépense ce mois-ci'));
+    conteneur.append(el('p', {class: 'vide-liste'}, 'Aucune dépense ce mois-ci.', el('br'), 'Touche + pour en ajouter une.'));
     return;
   }
 

@@ -449,6 +449,13 @@ button.ligne:active { background: var(--sable); }
     z-index: 1;
 }
 .feuille-entete h2 { margin: 0; }
+/* Le bouton de validation d'une feuille reste visible sans faire défiler (ex. ajout rapide) */
+.feuille .btn-primaire[type="submit"] {
+    position: sticky;
+    bottom: 8px;
+    z-index: 1;
+    box-shadow: 0 0 0 8px var(--fond);
+}
 
 /* ── Toast et bandeau ────────────────────────────────────────────────── */
 
@@ -639,3 +646,5 @@ details.repliable > summary {
 .case-detail { color: var(--attenue); font-size: 0.9rem; }
 .ligne-revenu + .ligne-revenu { border-top: 1px solid var(--filet); padding-top: 8px; }
 .carte-stat .lien-stat { margin-top: 6px; color: var(--acc-fonce); font-weight: 600; }
+.carte-stat .detail-stat { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; color: var(--attenue); }
+.carte-stat.large .detail-stat:first-of-type { margin-top: 4px; }

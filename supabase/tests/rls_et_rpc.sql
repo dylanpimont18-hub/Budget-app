@@ -151,6 +151,10 @@ declare
   impots uuid;
 begin
   select id into impots from public.recurrentes where libelle = 'Impôts';
+  -- Nourrice : montant variable ; crédit perso de Dylan
+  update public.recurrentes set variable = true where libelle = 'Garde des enfants (Pajemploi)';
+  insert into public.recurrentes (foyer_id, libelle, montant, membre_id)
+  values (current_setting('test.foyer')::uuid, 'Crédit perso', 120, current_setting('test.membre_dylan')::uuid);
   r := public.ouvrir_mois('2027-01',
     jsonb_build_array(jsonb_build_object('membre_id', current_setting('test.membre_dylan'), 'salaire', 1850,
                                          'solde', 500, 'salaire_dans_solde', true)),
@@ -172,6 +176,12 @@ begin
   assert n = 1, 'janvier : seule Impôts doit être déjà prélevée, obtenu ' || n;
   select count(*) into n from public.revenus_mois where mois_id = janv and dans_solde;
   assert n = 1, 'janvier : CAF déjà reçue non enregistrée';
+  select count(*) into n from public.recurrentes_mois
+  where mois_id = janv and libelle = 'Garde des enfants (Pajemploi)' and variable and a_confirmer;
+  assert n = 1, 'janvier : la nourrice doit être variable et à confirmer';
+  select count(*) into n from public.recurrentes_mois
+  where mois_id = janv and libelle = 'Crédit perso' and membre_id = current_setting('test.membre_dylan')::uuid and not a_confirmer;
+  assert n = 1, 'janvier : crédit perso de Dylan non recopié';
   perform set_config('test.janv', janv::text, true);
 end $$;
 
