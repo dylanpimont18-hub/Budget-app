@@ -6,6 +6,7 @@ import {formatEUR, syntheseMois, bilanMois, niveauBudget, depensesParCategorie, 
 import {el, ajouter, ouvrirFeuille, toast, champMontant, choixOuiNon} from '../ui.js';
 import {selecteurMois, aujourdhui, categorieDe} from './depenses.js';
 import {ouvrirRevenus, ouvrirCategories, ouvrirProfil} from './reglages.js';
+import {ouvrirConfirmation} from './recurrentes.js';
 import {copier} from './connexion.js';
 import {seDeconnecter} from '../app.js';
 
@@ -40,15 +41,15 @@ export function rendreTableau(conteneur) {
     versements: d.versements,
   });
 
+  // Mois passé : la prévision n'a plus de sens, on montre le bilan
   ajouter(conteneur, [
-    cartes(synthese),
-    estMoisCourant() ? null : bilan(),
+    estMoisCourant() ? cartes(synthese) : bilan(),
     el('h2', {}, 'Budgets par catégorie'),
     categories(),
     el('h2', {}, 'Par personne'),
     blocMembres(),
     el('h2', {}, 'Répartition'),
-    graphiques(synthese),
+    graphiques(synthese, {prevision: estMoisCourant()}),
     piedDePage()]);
 }
 
@@ -62,6 +63,11 @@ function bandeaux() {
     resultat.push(el('div', {class: 'bandeau-info', role: 'status'},
       el('span', {}, 'Remplis ta part du mois : salaire et solde'),
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => editerMembre(etat.moi, mien)}, 'Remplir')));
+  }
+  for (const r of d.recurrentes.filter((x) => x.a_confirmer)) {
+    resultat.push(el('div', {class: 'bandeau-info', role: 'status'},
+      el('span', {}, `${r.icone ?? '📌'} Montant de ${r.libelle} ce mois-ci ?`),
+      el('button', {class: 'btn-primaire', type: 'button', onclick: () => ouvrirConfirmation(r)}, 'Saisir')));
   }
   for (const mm of d.membresMois) {
     const membre = etat.membres.find((m) => m.id === mm.membre_id);
@@ -117,13 +123,21 @@ function cartes(s) {
   else if (s.resteLibre < 0) sousTexte = '⚠ Le prévu dépasse ce qui est disponible';
   else sousTexte = `${formatPct(s.pctResteLibre)} du disponible · prévision de fin de mois`;
 
+  // Tant qu'un membre n'a pas rempli sa part, son solde manque : la prévision est partielle
+  const enAttente = etat.membres.filter((m) => !etat.donnees.membresMois.find((x) => x.membre_id === m.id)?.renseigne);
+  if (enAttente.length && s.resteLibre >= 0) {
+    sousTexte = `Prévision partielle : ${enAttente.map((m) => m.prenom).join(' et ')} n'a pas encore rempli sa part`;
+  }
+
+  const detail = (libelle, valeur) => el('div', {class: 'detail-stat'}, el('span', {}, libelle),
+    el('span', {class: 'montant'}, formatEUR(valeur)));
   const disponible = [
     el('div', {class: 'etiquette-stat'}, 'Disponible'),
     el('div', {class: 'valeur-stat montant'}, formatEUR(s.disponible)),
-    el('div', {class: 'sous-stat'}, `Comptes ${formatEUR(s.comptes)}`),
-    el('div', {class: 'sous-stat'}, `Salaires à recevoir ${formatEUR(s.salairesARecevoir)}`),
-    el('div', {class: 'sous-stat'}, `Revenus à recevoir ${formatEUR(s.revenusARecevoir)}`),
-    modifiable ? el('div', {class: 'sous-stat lien-stat'}, 'Autres revenus ›') : null,
+    detail('Sur les comptes', s.comptes),
+    detail('Salaires à recevoir', s.salairesARecevoir),
+    detail('Autres revenus à recevoir', s.revenusARecevoir),
+    modifiable ? el('div', {class: 'sous-stat lien-stat'}, 'Gérer les autres revenus ›') : null,
   ];
 
   const sousCharges = s.chargesAPrelever !== s.chargesFixes
@@ -139,9 +153,9 @@ function cartes(s) {
       el('div', {class: 'valeur-stat montant'}, formatEUR(s.resteLibre)),
       el('div', {class: 'sous-stat'}, sousTexte)),
     modifiable
-      ? el('button', {class: 'carte-stat', type: 'button', style: {textAlign: 'left', font: 'inherit'},
-          'aria-label': `Disponible ${formatEUR(s.disponible)}, modifier les autres revenus`, onclick: ouvrirRevenus}, disponible)
-      : el('div', {class: 'carte-stat'}, disponible),
+      ? el('button', {class: 'carte-stat large', type: 'button', style: {textAlign: 'left', font: 'inherit'},
+          'aria-label': `Disponible ${formatEUR(s.disponible)}, gérer les autres revenus`, onclick: ouvrirRevenus}, disponible)
+      : el('div', {class: 'carte-stat large'}, disponible),
     carte('Charges à prélever', s.chargesAPrelever, sousCharges),
     carte('Budgets à venir', s.budgetsAVenir, sousBudgets),
     carte('Objectifs', s.objectifs, [sousPct(s.objectifs)]));
@@ -156,6 +170,8 @@ function bilan() {
   return el('div', {class: 'carte'},
     el('h3', {}, 'Bilan du mois'),
     el('ul', {class: 'legende'},
+      el('li', {}, el('span', {class: 'nom'}, 'Charges fixes'),
+        el('span', {class: 'montant'}, formatEUR(d.recurrentes.reduce((t, r) => t + Number(r.montant), 0)))),
       el('li', {}, el('span', {class: 'nom'}, 'Budgets prévus'), el('span', {class: 'montant'}, formatEUR(b.prevu))),
       el('li', {}, el('span', {class: 'nom'}, 'Dépensé'), el('span', {class: 'montant'}, formatEUR(b.depense))),
       el('li', {}, el('span', {class: 'nom'}, b.ecart >= 0 ? 'Économisé sur les budgets' : 'Dépassement total'),
@@ -261,6 +277,8 @@ function blocMembres() {
             ? 'Solde : non saisi'
             : `Solde ${formatEUR(Number(mm.solde))}${mm.solde_le ? ` au ${libelleDate(mm.solde_le)}` : ''}`),
         ];
+    const perso = d.recurrentes.filter((r) => r.membre_id === m.id).reduce((t, r) => t + Number(r.montant), 0);
+    if (perso > 0) infos.push(el('div', {class: 'sous-stat'}, `Charges perso ${formatEUR(perso)}`));
     const contenu = [
       el('div', {class: 'etiquette-stat'}, m.prenom),
       el('div', {class: 'valeur-stat montant'}, formatEUR(depenses[m.id] ?? 0)),
@@ -321,16 +339,16 @@ function editerMembre(membre, mm) {
     }
   }},
   dansSolde.element, salaire.element, aide, solde.element,
-  el('p', {class: 'attenue', style: {margin: 0}},
-    'Les dépenses datées d\'avant le jour du solde sont considérées comme déjà sorties du compte. '
-    + 'Si tu mets le solde à jour, pense à cocher les charges déjà prélevées dans Récurrentes.'),
+  premiereFois ? null : el('p', {class: 'attenue', style: {margin: 0}},
+    'Nouveau solde ? Les dépenses d\'avant aujourd\'hui y sont déjà déduites. '
+    + 'Coche ensuite dans Récurrentes les charges déjà prélevées.'),
   message, bouton);
   feuille = ouvrirFeuille(form, {titre: membre.prenom});
 }
 
 // ── Graphiques ─────────────────────────────────────────────────────────
 
-function graphiques(s) {
+function graphiques(s, {prevision}) {
   const d = etat.donnees;
   const postes = topPostes([
     ...d.recurrentes.map((r) => ({nom: r.libelle, montant: Number(r.montant)})),
@@ -362,7 +380,7 @@ function graphiques(s) {
               el('span', {class: 'nom'}, p.nom),
               el('span', {class: 'montant'}, formatPct(pct(p.montant, totalPostes)))))))
         : el('p', {class: 'attenue'}, 'Rien de prévu ce mois-ci.')),
-    el('div', {class: 'carte'},
+    prevision ? el('div', {class: 'carte'},
       el('h3', {}, 'Répartition du disponible'),
       el('div', {class: 'barre-repartition', role: 'img',
         'aria-label': segments.map((x) => `${x.nom} ${formatEUR(x.montant)}`).join(', ')},
@@ -371,7 +389,7 @@ function graphiques(s) {
       el('ul', {class: 'legende'}, segments.map((x) => el('li', {},
         el('span', {class: 'puce', style: {background: x.couleur}}),
         el('span', {class: 'nom'}, x.nom),
-        el('span', {class: 'montant'}, formatEUR(x.montant)))))));
+        el('span', {class: 'montant'}, formatEUR(x.montant)))))) : null);
 }
 
 // Anneau SVG : un cercle par part, décalé avec stroke-dashoffset

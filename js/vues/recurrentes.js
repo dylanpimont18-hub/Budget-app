@@ -1,5 +1,6 @@
-// Onglet Récurrentes : charges fixes du mois et revue de début de mois par swipe.
-import {ajouterRecurrente, modifierRecurrente, marquerPrelevee, retirerDuMois, restaurerDansMois, supprimerRecurrente}
+// Onglet Récurrentes : charges fixes du mois (communes ou personnelles, montant fixe ou variable)
+// et revue de début de mois par swipe, où l'on saisit aussi le montant des charges variables.
+import {ajouterRecurrente, modifierRecurrente, confirmerMontant, retirerDuMois, restaurerDansMois, supprimerRecurrente}
   from '../db.js';
 import {etat, recharger} from '../etat.js';
 import {formatEUR, libelleMois} from '../calc.js';
@@ -12,6 +13,7 @@ const SEUIL_SWIPE = 100;
 let revue = null;
 
 const enLectureSeule = () => etat.moisCle !== etat.moisCourantCle;
+const prenomDe = (id) => etat.membres.find((m) => m.id === id)?.prenom;
 
 export function rendreRecurrentes(conteneur, {revue: demarrerRevue = false} = {}) {
   const donnees = etat.donnees;
@@ -33,20 +35,35 @@ function rendreListe(conteneur) {
   const lectureSeule = enLectureSeule();
   const total = recurrentes.reduce((t, r) => t + Number(r.montant), 0);
 
+  // Communes d'abord, puis les charges personnelles de chacun
+  const groupes = [{titre: 'Communes', lignes: recurrentes.filter((r) => !prenomDe(r.membre_id))},
+    ...etat.membres.map((m) => ({titre: `Perso · ${m.prenom}`, lignes: recurrentes.filter((r) => r.membre_id === m.id)}))]
+    .filter((g) => g.lignes.length);
+
+  const ligne = (r) => {
+    let sous = null;
+    if (r.a_confirmer) sous = el('span', {class: 'pastille statut-retard'}, 'Montant à confirmer');
+    else if (r.dans_solde) sous = 'Déjà prélevée';
+    else if (r.variable) sous = 'Montant variable';
+    return el('li', {},
+      el(lectureSeule ? 'div' : 'button', {class: 'ligne', type: lectureSeule ? null : 'button',
+        onclick: lectureSeule ? null : () => (r.a_confirmer ? ouvrirConfirmation(r) : ouvrirEdition(r))},
+        el('span', {class: 'ligne-icone', 'aria-hidden': 'true'}, r.icone ?? '📌'),
+        el('span', {class: 'ligne-texte'}, el('div', {class: 'ligne-titre'}, r.libelle),
+          sous ? el('div', {class: 'ligne-sous'}, sous) : null),
+        el('span', {class: 'ligne-montant montant'}, formatEUR(Number(r.montant)))));
+  };
+
   ajouter(conteneur, [
     el('div', {class: 'entete-vue'},
       el('h1', {}, 'Récurrentes'),
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
-    el('p', {class: 'attenue'},
-      `Charges fixes communes · ${libelleMois(etat.moisCle)}`, lectureSeule ? ' · lecture seule' : ''),
-    recurrentes.length
-      ? el('ul', {class: 'liste'}, recurrentes.map((r) => el('li', {},
-          el(lectureSeule ? 'div' : 'button', {class: 'ligne', type: lectureSeule ? null : 'button',
-            onclick: lectureSeule ? null : () => ouvrirEdition(r)},
-            el('span', {class: 'ligne-icone', 'aria-hidden': 'true'}, r.icone ?? '📌'),
-            el('span', {class: 'ligne-texte'}, el('div', {class: 'ligne-titre'}, r.libelle),
-              r.dans_solde ? el('div', {class: 'ligne-sous'}, 'Déjà prélevée') : null),
-            el('span', {class: 'ligne-montant montant'}, formatEUR(Number(r.montant)))))))
+    el('p', {class: 'attenue'}, `Charges fixes · ${libelleMois(etat.moisCle)}`, lectureSeule ? ' · lecture seule' : ''),
+    groupes.length
+      ? groupes.map((g) => [
+          el('div', {class: 'titre-groupe'}, el('span', {}, g.titre),
+            el('span', {class: 'montant'}, formatEUR(g.lignes.reduce((t, r) => t + Number(r.montant), 0)))),
+          el('ul', {class: 'liste'}, g.lignes.map(ligne))])
       : el('p', {class: 'vide-liste'}, 'Aucune charge fixe ce mois-ci.'),
     lectureSeule ? null : el('div', {class: 'actions'},
       el('button', {class: 'btn-secondaire', type: 'button', onclick: () => ouvrirEdition(null)}, '+ Ajouter une charge'),
@@ -55,16 +72,49 @@ function rendreListe(conteneur) {
             commencerRevue();
             conteneur.replaceChildren();
             rendreRevue(conteneur);
-          }},
-            'Revoir les charges')
+          }}, 'Revoir les charges')
         : null)]);
 }
 
+// Saisie rapide du montant d'une charge variable (aussi ouverte depuis l'onglet Budget)
+export function ouvrirConfirmation(ligne) {
+  const champ = champMontant({id: 'confirmation-montant', etiquette: `Montant de ${libelleMois(etat.moisCle)}`,
+    valeur: ligne.montant, grand: true});
+  const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
+  const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, 'Enregistrer');
+  let feuille;
+  const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
+    e.preventDefault();
+    const r = champ.valider();
+    if (!r.ok) return;
+    bouton.disabled = true;
+    try {
+      await confirmerMontant(ligne, r.valeur);
+      feuille.fermer();
+      toast('Montant enregistré');
+      await recharger();
+    } catch (err) {
+      message.textContent = err.message;
+      bouton.disabled = false;
+    }
+  }},
+  champ.element,
+  el('p', {class: 'attenue', style: {margin: 0}}, 'Prérempli avec le dernier montant saisi.'),
+  message, bouton,
+  el('button', {class: 'btn-texte', type: 'button', onclick: () => { feuille.fermer(); ouvrirEdition(ligne); }},
+    'Modifier la charge'));
+  feuille = ouvrirFeuille(form, {titre: `${ligne.icone ?? '📌'} ${ligne.libelle}`});
+  champ.input.focus();
+  champ.input.select();
+}
+
 function ouvrirEdition(ligne) {
-  let icone = ligne?.icone ?? ICONES[0];
+  let icone = ligne?.icone ?? '💳';
+  let payeur = ligne?.membre_id ?? null;
   const libelle = el('input', {class: 'champ', id: 'recurrente-libelle', value: ligne?.libelle ?? '',
-    autocomplete: 'off', required: true});
-  const montant = champMontant({id: 'recurrente-montant', etiquette: 'Montant mensuel', valeur: ligne?.montant ?? null});
+    autocomplete: 'off', required: true, placeholder: 'Ex. : crédit voiture'});
+  const montant = champMontant({id: 'recurrente-montant', etiquette: 'Montant ce mois-ci', valeur: ligne?.montant ?? null});
+  const variable = caseACocher({etiquette: 'Le montant change chaque mois', valeur: ligne?.variable ?? false});
   const prelevee = caseACocher({etiquette: 'Déjà prélevée quand le solde a été saisi', valeur: ligne?.dans_solde ?? false});
   const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
   const icones = el('div', {class: 'grille-choix icones'}, ICONES.map((i) =>
@@ -72,6 +122,12 @@ function ouvrirEdition(ligne) {
       icone = i;
       for (const b of icones.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
     }}, i)));
+  const payeurs = el('div', {class: 'segment', role: 'group', 'aria-label': 'Payée par'},
+    [{id: null, nom: 'Commune'}, ...etat.membres.map((m) => ({id: m.id, nom: m.prenom}))].map((c) =>
+      el('button', {type: 'button', 'aria-pressed': String(c.id === payeur), onclick: (e) => {
+        payeur = c.id;
+        for (const b of payeurs.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
+      }}, c.nom)));
 
   let feuille;
   const executer = async (bouton, action, succes) => {
@@ -94,22 +150,24 @@ function ouvrirEdition(ligne) {
     const m = montant.valider();
     if (!libelle.value.trim()) { message.textContent = 'Indique un libellé'; return; }
     if (!m.ok) return;
-    const champs = {libelle: libelle.value.trim(), icone, montant: m.valeur};
+    const champs = {libelle: libelle.value.trim(), icone, montant: m.valeur, variable: variable.lire(), membre_id: payeur,
+      dans_solde: prelevee.lire()};
     executer(enregistrer,
-      async () => {
-        if (!ligne) return ajouterRecurrente(etat.foyer.id, etat.donnees.mois.id, {...champs, dans_solde: prelevee.lire()});
-        await modifierRecurrente(ligne, champs);
-        if (prelevee.lire() !== Boolean(ligne.dans_solde)) await marquerPrelevee(ligne.id, prelevee.lire());
-      },
+      () => (ligne ? modifierRecurrente(ligne, champs) : ajouterRecurrente(etat.foyer.id, etat.donnees.mois.id, champs)),
       ligne ? 'Charge modifiée' : 'Charge ajoutée');
   }},
   el('div', {}, el('label', {class: 'etiquette', for: 'recurrente-libelle'}, 'Libellé'), libelle),
   montant.element,
-  el('div', {}, el('span', {class: 'etiquette'}, 'Icône'), icones),
-  prelevee.element,
+  el('div', {}, el('span', {class: 'etiquette'}, 'Payée par'), payeurs),
+  variable.element,
   el('p', {class: 'attenue', style: {margin: 0}},
-    "Cochée, la charge est déjà comprise dans un solde : elle n'est pas retirée une 2e fois (ce mois seulement). "
-    + 'Le reste de la modification vaut aussi pour les mois suivants.'),
+    'Nourrice, électricité… : chaque nouveau mois, le dernier montant est proposé et tu le confirmes.'),
+  el('div', {}, el('span', {class: 'etiquette'}, 'Icône'), icones),
+  el('details', {class: 'repliable', open: Boolean(ligne?.dans_solde)},
+    el('summary', {}, 'Déjà prélevée ?'),
+    prelevee.element,
+    el('p', {class: 'attenue', style: {margin: 0}},
+      "Cochée, la charge est déjà comprise dans un solde : elle n'est pas retirée une 2e fois (ce mois seulement).")),
   message,
   enregistrer);
 
@@ -122,6 +180,7 @@ function ouvrirEdition(ligne) {
     }}, 'Supprimer la charge')) : null;
 
   feuille = ouvrirFeuille(el('div', {}, form, actions), {titre: ligne ? 'Modifier la charge' : 'Nouvelle charge'});
+  if (!ligne) libelle.focus();
 }
 
 // ── Revue par swipe ────────────────────────────────────────────────────
@@ -150,18 +209,42 @@ function rendreRevue(conteneur) {
     return;
   }
   const ligne = revue.lignes[revue.index];
+  const qui = prenomDe(ligne.membre_id);
   const carte = el('div', {class: 'carte-swipe', role: 'group', 'aria-label': `${ligne.libelle}, ${formatEUR(Number(ligne.montant))}`},
     el('div', {class: 'emoji', 'aria-hidden': 'true'}, ligne.icone ?? '📌'),
     el('h2', {style: {margin: 0}}, ligne.libelle),
-    el('div', {class: 'montant'}, formatEUR(Number(ligne.montant))));
+    qui ? el('div', {class: 'attenue'}, `Perso · ${qui}`) : null,
+    ligne.variable ? null : el('div', {class: 'montant'}, formatEUR(Number(ligne.montant))));
+
+  // Charge variable : le montant de ce mois se saisit sous la carte, il est enregistré en la gardant
+  const champ = ligne.variable
+    ? champMontant({id: 'revue-montant', etiquette: 'Montant ce mois-ci', valeur: ligne.montant, grand: true})
+    : null;
+  // Avec un solde saisi, on note si la charge en est déjà sortie (pour ne pas la retirer deux fois)
+  const avecSolde = etat.donnees.membresMois.some((m) => m.solde != null);
+  const prelevee = avecSolde
+    ? caseACocher({etiquette: 'Déjà prélevée (comprise dans le solde)', valeur: Boolean(ligne.dans_solde)})
+    : null;
 
   const decider = async (action) => {
     if (revue.occupe) return;
+    let montant = null;
+    if (action === 'garder' && champ) {
+      const r = champ.valider();
+      if (!r.ok) { champ.input.focus(); return; }
+      montant = r.valeur;
+    }
+    const dansSolde = prelevee ? prelevee.lire() : Boolean(ligne.dans_solde);
+    const aEnregistrer = action === 'garder' && (montant != null || dansSolde !== Boolean(ligne.dans_solde));
     revue.occupe = true;
     carte.style.transition = 'transform 0.3s ease';
     carte.style.transform = `translate(${action === 'garder' ? '' : '-'}150vw, 0) rotate(${action === 'garder' ? 20 : -20}deg)`;
     try {
       if (action === 'retirer') await retirerDuMois(ligne.id);
+      if (aEnregistrer) {
+        await modifierRecurrente(ligne, {libelle: ligne.libelle, icone: ligne.icone, montant: montant ?? ligne.montant,
+          variable: ligne.variable, membre_id: ligne.membre_id, dans_solde: dansSolde});
+      }
       revue.historique.push({action, ligne});
       revue.index += 1;
     } catch (e) {
@@ -173,7 +256,7 @@ function rendreRevue(conteneur) {
       conteneur.replaceChildren();
       rendreRevue(conteneur);
     }, 250);
-    if (action === 'retirer') recharger().catch(() => {});
+    if (action === 'retirer' || aEnregistrer) recharger().catch(() => {});
   };
 
   const annuler = async () => {
@@ -199,17 +282,18 @@ function rendreRevue(conteneur) {
     el('div', {class: 'entete-vue'},
       el('h1', {}, 'Revue des charges'),
       el('span', {class: 'pastille', 'aria-live': 'polite'}, `${revue.index + 1} / ${revue.lignes.length}`)),
-    el('p', {class: 'attenue'}, 'Glisse à droite pour garder la charge ce mois-ci, à gauche pour la retirer de ce mois.'),
+    el('p', {class: 'attenue'}, 'Cette charge tombe-t-elle ce mois-ci ? Glisse à droite pour la garder, à gauche pour la retirer de ce mois.'),
     el('div', {class: 'zone-swipe'}, carte),
-    el('div', {class: 'guides-swipe'},
+    champ ? champ.element : el('div', {class: 'guides-swipe'},
       el('span', {class: 'gauche'}, '← Retirer du mois'),
       el('span', {class: 'droite'}, 'Garder →')),
+    prelevee?.element,
     el('div', {class: 'rangee'},
       el('button', {class: 'btn-danger', type: 'button', onclick: () => decider('retirer')}, '✕ Retirer'),
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => decider('garder')}, '✓ Garder')),
     el('div', {class: 'rangee', style: {marginTop: '8px'}},
       el('button', {class: 'btn-texte', type: 'button', disabled: !revue.historique.length, onclick: annuler,
-        'aria-label': 'Annuler le dernier swipe'}, '↩ Annuler'),
+        'aria-label': 'Annuler le dernier choix'}, '↩ Annuler'),
       el('button', {class: 'btn-texte', type: 'button', onclick: () => terminerRevue(conteneur)}, 'Terminer')));
 }
 

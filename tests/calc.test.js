@@ -102,10 +102,12 @@ test('objectifs', () => {
   assert.deepEqual(suiviObjectif(o, [{mois_cle: '2026-10', montant: 100}], '2026-10'),
     {verse: 100, pct: 8.33, prevu: 100, statut: 'ajour', moisRestants: 11, effortRecalcule: 100, echu: false});
   const r = suiviObjectif(o, [{mois_cle: '2026-10', montant: 100}], '2026-12');
-  assert.equal(r.statut, 'retard'); assert.equal(r.prevu, 300);
+  assert.equal(r.statut, 'retard'); assert.equal(r.prevu, 200);   // octobre et novembre ; décembre pas encore dû
   assert.equal(r.moisRestants, 10); assert.equal(r.effortRecalcule, 110);
   assert.equal(suiviObjectif(o, [{mois_cle: '2026-10', montant: 300}], '2026-11').statut, 'avance');
   const e = suiviObjectif(o, [{mois_cle: '2026-10', montant: 500}], '2028-01');
   assert.equal(e.echu, true); assert.equal(e.moisRestants, 0); assert.equal(e.effortRecalcule, 0);
   assert.equal(suiviObjectif(o, [{mois_cle: '2026-10', montant: 1200}], '2026-10').statut, 'atteint');
+  const neuf = suiviObjectif(o, [], '2026-10');   // créé ce mois-ci, rien versé : pas en retard
+  assert.equal(neuf.statut, 'ajour'); assert.equal(neuf.prevu, 0);
 });
