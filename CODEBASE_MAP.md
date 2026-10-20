@@ -105,7 +105,7 @@ Ouverture du mois : sa propre part (salaire, solde), revenus déjà reçus, vers
 - rendreOuverture(conteneur, {apres}) — formulaire d'ouverture du mois
 
 ## js/vues/recurrentes.js
-Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue par swipe (montant, déjà prélevée).
+Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue par swipe (montant modifiable, déjà prélevée).
 - rendreRecurrentes(conteneur, {revue}) — liste groupée ou revue par swipe
 - ouvrirConfirmation(ligne) — saisir le montant d'une charge variable
 
