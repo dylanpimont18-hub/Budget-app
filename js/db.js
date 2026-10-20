@@ -198,3 +198,46 @@ export async function ouvrirMois(cle, membres, revenus, versements) {
     p_cle: cle, p_membres: membres, p_revenus: revenus, p_versements: versements,
   }), 'Ouverture du mois impossible.');
 }
+
+// ── Charges fixes (récurrentes) ────────────────────────────────────────
+// Chaque modification touche la ligne du mois et le modèle utilisé pour les mois suivants.
+
+export async function ajouterRecurrente(foyerId, moisId, {libelle, icone, montant, ordre = 99}) {
+  const modele = verifier(await sb.from('recurrentes')
+    .insert({foyer_id: foyerId, libelle, icone, montant, ordre}).select('id').single(),
+  'Impossible d\'ajouter la charge.');
+  verifier(await sb.from('recurrentes_mois')
+    .insert({foyer_id: foyerId, mois_id: moisId, recurrente_id: modele.id, libelle, icone, montant, ordre}),
+  'Charge ajoutée au modèle, mais pas à ce mois-ci.');
+}
+
+export async function modifierRecurrente(ligneMois, {libelle, icone, montant}) {
+  verifier(await sb.from('recurrentes_mois').update({libelle, icone, montant}).eq('id', ligneMois.id),
+    'Impossible de modifier la charge.');
+  if (ligneMois.recurrente_id) {
+    verifier(await sb.from('recurrentes').update({libelle, icone, montant}).eq('id', ligneMois.recurrente_id),
+      'Charge modifiée pour ce mois, mais pas pour les mois suivants.');
+  }
+}
+
+// Retire la charge du mois seulement : le modèle reste actif pour les mois suivants
+export async function retirerDuMois(ligneMoisId) {
+  verifier(await sb.from('recurrentes_mois').delete().eq('id', ligneMoisId), 'Impossible de retirer la charge.');
+}
+
+// Annule un retrait : remet la ligne telle qu'elle était
+export async function restaurerDansMois(foyerId, moisId, ligne) {
+  const {id, recurrente_id, libelle, icone, montant, ordre} = ligne;
+  verifier(await sb.from('recurrentes_mois')
+    .insert({id, foyer_id: foyerId, mois_id: moisId, recurrente_id, libelle, icone, montant, ordre}),
+  'Impossible de restaurer la charge.');
+}
+
+// Supprime du mois et désactive dans le modèle
+export async function supprimerRecurrente(ligneMois) {
+  await retirerDuMois(ligneMois.id);
+  if (ligneMois.recurrente_id) {
+    verifier(await sb.from('recurrentes').update({active: false}).eq('id', ligneMois.recurrente_id),
+      'Charge retirée de ce mois, mais toujours prévue les mois suivants.');
+  }
+}
