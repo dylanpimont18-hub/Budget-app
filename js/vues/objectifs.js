@@ -31,7 +31,7 @@ export function rendreObjectifs(conteneur) {
     el('div', {class: 'entete-vue'}, el('h1', {}, 'Objectifs')),
     actifs.length
       ? actifs.map(carteObjectif)
-      : el('p', {class: 'vide-liste'}, 'Aucun objectif en cours. Créez-en un pour suivre votre épargne.'),
+      : el('p', {class: 'vide-liste'}, 'Aucun objectif en cours. Crées-en un pour suivre ton épargne.'),
     el('button', {class: 'btn-secondaire', type: 'button', onclick: () => ouvrirFormulaire(null)}, '+ Nouvel objectif'),
     archives.length
       ? el('details', {class: 'repliable', style: {marginTop: '16px'}},
@@ -182,8 +182,8 @@ function ouvrirDetail(o) {
 
   const proposition = !o.archive && (statut === 'atteint' || statut === 'echu')
     ? el('p', {class: 'apercu-calcul'}, statut === 'atteint'
-        ? 'Objectif atteint 🎉 Vous pouvez l\'archiver.'
-        : 'L\'échéance est passée. Vous pouvez archiver cet objectif.')
+        ? 'Objectif atteint 🎉 Tu peux l\'archiver.'
+        : 'L\'échéance est passée. Tu peux archiver cet objectif.')
     : null;
 
   const contenu = el('div', {class: 'formulaire'},

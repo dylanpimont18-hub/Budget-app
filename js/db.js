@@ -65,6 +65,17 @@ export async function inscrire(email, mdp) {
   return data.session;
 }
 
+// Envoie le lien de réinitialisation ; au retour, surAuth reçoit 'PASSWORD_RECOVERY'
+export async function demanderReinitialisation(email) {
+  const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname});
+  if (error) throw new Error(messageAuth(error));
+}
+
+export async function changerMotDePasse(mdp) {
+  const {error} = await sb.auth.updateUser({password: mdp});
+  if (error) throw new Error(messageAuth(error));
+}
+
 export async function deconnecter() {
   const {error} = await sb.auth.signOut();
   if (error) throw erreur(error, 'Déconnexion impossible.');
@@ -136,9 +147,9 @@ export async function chargerMois(foyerId, cle) {
 
   const id = donnees.mois.id;
   const [membresMois, revenus, recurrentes, budgets] = await Promise.all([
-    sb.from('mois_membres').select('membre_id, salaire, solde').eq('mois_id', id),
-    sb.from('revenus_mois').select('id, libelle, montant').eq('mois_id', id).order('libelle'),
-    sb.from('recurrentes_mois').select('id, recurrente_id, libelle, icone, montant, ordre').eq('mois_id', id)
+    sb.from('mois_membres').select('membre_id, salaire, solde, solde_le, salaire_dans_solde, salaire_recu, renseigne').eq('mois_id', id),
+    sb.from('revenus_mois').select('id, libelle, montant, dans_solde').eq('mois_id', id).order('libelle'),
+    sb.from('recurrentes_mois').select('id, recurrente_id, libelle, icone, montant, ordre, dans_solde').eq('mois_id', id)
       .order('ordre').order('libelle'),
     sb.from('budgets_mois').select('categorie_id, montant').eq('mois_id', id),
   ]);
@@ -194,23 +205,31 @@ export function ecouter(foyerId, cb) {
 
 // ── Ouverture du mois ──────────────────────────────────────────────────
 
-// membres: [{membre_id, salaire, solde}], revenus: [{libelle, montant}], versements: [{objectif_id, montant, membre_id}]
-// Si le mois existe déjà (ouvert par l'autre membre), renvoie son id sans rien modifier.
-export async function ouvrirMois(cle, membres, revenus, versements) {
+// membres: [{membre_id, salaire, solde, salaire_dans_solde}] (sa propre part), revenus: [{libelle, montant, dans_solde}],
+// versements: [{objectif_id, montant, membre_id}], prelevees: ids des récurrentes du modèle déjà prélevées.
+// Renvoie {mois_id, cree} : si l'autre membre a déjà ouvert le mois, seule la part de l'appelant y est ajoutée.
+export async function ouvrirMois(cle, membres, revenus, versements, prelevees) {
   return verifierRpc(await sb.rpc('ouvrir_mois', {
-    p_cle: cle, p_membres: membres, p_revenus: revenus, p_versements: versements,
+    p_cle: cle, p_membres: membres, p_revenus: revenus, p_versements: versements, p_prelevees: prelevees,
   }), 'Ouverture du mois impossible.');
+}
+
+// Charges fixes actives du modèle (proposées à l'ouverture)
+export async function chargerRecurrentesModele(foyerId) {
+  return verifier(await sb.from('recurrentes').select('id, libelle, icone, montant')
+    .eq('foyer_id', foyerId).eq('active', true).order('ordre').order('libelle'),
+  'Impossible de charger les charges fixes.');
 }
 
 // ── Charges fixes (récurrentes) ────────────────────────────────────────
 // Chaque modification touche la ligne du mois et le modèle utilisé pour les mois suivants.
 
-export async function ajouterRecurrente(foyerId, moisId, {libelle, icone, montant, ordre = 99}) {
+export async function ajouterRecurrente(foyerId, moisId, {libelle, icone, montant, ordre = 99, dans_solde = false}) {
   const modele = verifier(await sb.from('recurrentes')
     .insert({foyer_id: foyerId, libelle, icone, montant, ordre}).select('id').single(),
   'Impossible d\'ajouter la charge.');
   verifier(await sb.from('recurrentes_mois')
-    .insert({foyer_id: foyerId, mois_id: moisId, recurrente_id: modele.id, libelle, icone, montant, ordre}),
+    .insert({foyer_id: foyerId, mois_id: moisId, recurrente_id: modele.id, libelle, icone, montant, ordre, dans_solde}),
   'Charge ajoutée au modèle, mais pas à ce mois-ci.');
 }
 
@@ -230,10 +249,16 @@ export async function retirerDuMois(ligneMoisId) {
 
 // Annule un retrait : remet la ligne telle qu'elle était
 export async function restaurerDansMois(foyerId, moisId, ligne) {
-  const {id, recurrente_id, libelle, icone, montant, ordre} = ligne;
+  const {id, recurrente_id, libelle, icone, montant, ordre, dans_solde = false} = ligne;
   verifier(await sb.from('recurrentes_mois')
-    .insert({id, foyer_id: foyerId, mois_id: moisId, recurrente_id, libelle, icone, montant, ordre}),
+    .insert({id, foyer_id: foyerId, mois_id: moisId, recurrente_id, libelle, icone, montant, ordre, dans_solde}),
   'Impossible de restaurer la charge.');
+}
+
+// Déjà prélevée quand le solde a été saisi (ce mois seulement)
+export async function marquerPrelevee(ligneMoisId, dansSolde) {
+  verifier(await sb.from('recurrentes_mois').update({dans_solde: dansSolde}).eq('id', ligneMoisId),
+    'Impossible de modifier la charge.');
 }
 
 // Supprime du mois et désactive dans le modèle
@@ -243,6 +268,22 @@ export async function supprimerRecurrente(ligneMois) {
     verifier(await sb.from('recurrentes').update({active: false}).eq('id', ligneMois.recurrente_id),
       'Charge retirée de ce mois, mais toujours prévue les mois suivants.');
   }
+}
+
+// ── Autres revenus du mois ─────────────────────────────────────────────
+
+export async function ajouterRevenu(foyerId, moisId, {libelle, montant, dans_solde}) {
+  verifier(await sb.from('revenus_mois').insert({foyer_id: foyerId, mois_id: moisId, libelle, montant, dans_solde}),
+    "Impossible d'ajouter le revenu.");
+}
+
+export async function modifierRevenu(id, {libelle, montant, dans_solde}) {
+  verifier(await sb.from('revenus_mois').update({libelle, montant, dans_solde}).eq('id', id),
+    'Impossible de modifier le revenu.');
+}
+
+export async function supprimerRevenu(id) {
+  verifier(await sb.from('revenus_mois').delete().eq('id', id), 'Impossible de supprimer le revenu.');
 }
 
 // ── Dépenses ponctuelles ───────────────────────────────────────────────
@@ -272,6 +313,42 @@ export async function modifierBudget(foyerId, moisId, categorieId, montant) {
     'Budget modifié pour ce mois, mais pas pour les mois suivants.');
 }
 
+// ── Catégories ─────────────────────────────────────────────────────────
+// Jamais supprimées : une catégorie désactivée garde ses dépenses passées.
+
+// moisId : mois en cours (ouvert), qui reçoit aussi le budget de la nouvelle catégorie
+export async function creerCategorie(foyerId, moisId, {nom, icone, budget, ordre}) {
+  const cat = verifier(await sb.from('categories')
+    .insert({foyer_id: foyerId, nom, icone, budget_defaut: budget, ordre}).select('id').single(),
+  'Impossible de créer la catégorie.');
+  if (moisId) {
+    verifier(await sb.from('budgets_mois').insert({foyer_id: foyerId, mois_id: moisId, categorie_id: cat.id, montant: budget}),
+      'Catégorie créée, mais pas ajoutée au budget de ce mois.');
+  }
+}
+
+export async function modifierCategorie(id, {nom, icone}) {
+  verifier(await sb.from('categories').update({nom, icone}).eq('id', id), 'Impossible de modifier la catégorie.');
+}
+
+// Désactiver la retire du budget du mois en cours ; la réactiver l'y remet avec son budget par défaut
+export async function activerCategorie(foyerId, moisId, categorie, active) {
+  verifier(await sb.from('categories').update({active}).eq('id', categorie.id), 'Impossible de modifier la catégorie.');
+  if (!moisId) return;
+  const requete = active
+    ? sb.from('budgets_mois').upsert({foyer_id: foyerId, mois_id: moisId, categorie_id: categorie.id,
+        montant: categorie.budget_defaut}, {onConflict: 'mois_id,categorie_id'})
+    : sb.from('budgets_mois').delete().eq('mois_id', moisId).eq('categorie_id', categorie.id);
+  verifier(await requete, 'Catégorie modifiée, mais pas le budget de ce mois.');
+}
+
+// ── Profil ─────────────────────────────────────────────────────────────
+
+export async function modifierProfil(membreId, {prenom, salaire_defaut}) {
+  verifier(await sb.from('membres').update({prenom, salaire_defaut}).eq('id', membreId),
+    "Impossible d'enregistrer ton profil.");
+}
+
 // ── Objectifs d'épargne ────────────────────────────────────────────────
 
 export async function creerObjectif(foyerId, {nom, icone, cible, debut, fin}) {
@@ -299,9 +376,12 @@ export async function supprimerVersement(id) {
 
 // ── Salaire et solde d'un membre pour un mois ──────────────────────────
 
-// Crée la ligne si le membre a rejoint le foyer après l'ouverture du mois
-export async function modifierMoisMembre(foyerId, moisId, membreId, {salaire, solde}) {
+// Crée la ligne si le membre a rejoint le foyer après l'ouverture du mois.
+// Seuls les champs fournis sont modifiés (confirmer un salaire ne touche ni au solde ni à salaire_dans_solde).
+export async function modifierMoisMembre(foyerId, moisId, membreId, champs) {
+  const permis = ['salaire', 'solde', 'solde_le', 'salaire_dans_solde', 'salaire_recu', 'renseigne'];
+  const ligne = Object.fromEntries(Object.entries(champs).filter(([k, v]) => permis.includes(k) && v !== undefined));
   verifier(await sb.from('mois_membres')
-    .upsert({foyer_id: foyerId, mois_id: moisId, membre_id: membreId, salaire, solde}, {onConflict: 'mois_id,membre_id'}),
+    .upsert({foyer_id: foyerId, mois_id: moisId, membre_id: membreId, ...ligne}, {onConflict: 'mois_id,membre_id'}),
   'Impossible d\'enregistrer le salaire.');
 }

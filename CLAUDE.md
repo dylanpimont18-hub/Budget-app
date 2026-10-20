@@ -39,4 +39,10 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
 - Use the CSS tokens on `:root` in `style.css` (terracotta palette from the Excel); no hard-coded colours.
 - Smartphone first: works at 375 px with no horizontal scroll, touch targets ≥ 44 px, respect `env(safe-area-inset-*)`.
 - Only the public (anon) Supabase key may appear in code; never a service key.
-- The month-start balance (`solde`) is information only and never enters a calculation.
+- Nothing is counted twice (`syntheseMois` in `calc.js`): each member's balance (`solde`, dated `solde_le`) is the
+  starting point; add only what is not in it yet (salary unless `salaire_dans_solde`, other income unless
+  `revenus_mois.dans_solde`), subtract only what has not left yet (charges unless `recurrentes_mois.dans_solde`,
+  max(budget, spent) minus the payer's expenses dated before `solde_le`, goal transfers). `salaire_recu` is display only.
+- Each member fills in their own part of the month (`mois_membres.renseigne`); `ouvrir_mois` returns `{mois_id, cree}`
+  and adds the caller's part if the month already exists.
+- Address the user with « tu » everywhere in the UI.
