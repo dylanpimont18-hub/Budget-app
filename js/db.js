@@ -257,3 +257,14 @@ export async function modifierDepense(id, champs) {
 export async function supprimerDepense(id) {
   verifier(await sb.from('depenses').delete().eq('id', id), 'Impossible de supprimer la dépense.');
 }
+
+// ── Budgets par catégorie ──────────────────────────────────────────────
+
+// Budget du mois et budget par défaut des mois suivants
+export async function modifierBudget(foyerId, moisId, categorieId, montant) {
+  verifier(await sb.from('budgets_mois')
+    .upsert({foyer_id: foyerId, mois_id: moisId, categorie_id: categorieId, montant}, {onConflict: 'mois_id,categorie_id'}),
+  'Impossible de modifier le budget.');
+  verifier(await sb.from('categories').update({budget_defaut: montant}).eq('id', categorieId),
+    'Budget modifié pour ce mois, mais pas pour les mois suivants.');
+}
