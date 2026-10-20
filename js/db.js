@@ -268,3 +268,28 @@ export async function modifierBudget(foyerId, moisId, categorieId, montant) {
   verifier(await sb.from('categories').update({budget_defaut: montant}).eq('id', categorieId),
     'Budget modifié pour ce mois, mais pas pour les mois suivants.');
 }
+
+// ── Objectifs d'épargne ────────────────────────────────────────────────
+
+export async function creerObjectif(foyerId, {nom, icone, cible, debut, fin}) {
+  verifier(await sb.from('objectifs').insert({foyer_id: foyerId, nom, icone, cible, debut, fin}),
+    'Impossible de créer l\'objectif.');
+}
+
+export async function modifierObjectif(id, champs) {
+  verifier(await sb.from('objectifs').update(champs).eq('id', id), 'Impossible de modifier l\'objectif.');
+}
+
+export async function archiverObjectif(id) {
+  await modifierObjectif(id, {archive: true});
+}
+
+// Un retrait est un versement négatif ; membre_id null = commun
+export async function ajouterVersement(foyerId, {objectif_id, mois_cle, montant, membre_id}) {
+  verifier(await sb.from('versements').insert({foyer_id: foyerId, objectif_id, mois_cle, montant, membre_id}),
+    'Impossible d\'enregistrer le versement.');
+}
+
+export async function supprimerVersement(id) {
+  verifier(await sb.from('versements').delete().eq('id', id), 'Impossible de supprimer le versement.');
+}

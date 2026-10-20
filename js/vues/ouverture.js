@@ -3,6 +3,7 @@ import {ouvrirMois, chargerMois} from '../db.js';
 import {etat, recharger} from '../etat.js';
 import {libelleMois, suiviObjectif} from '../calc.js';
 import {el, champMontant, toast} from '../ui.js';
+import {estArchive} from './objectifs.js';
 
 const REVENUS_PAR_DEFAUT = ['Allocations familiales (CAF)', 'Autres revenus (primes…)'];
 
@@ -80,7 +81,7 @@ export async function rendreOuverture(conteneur, {apres}) {
   else REVENUS_PAR_DEFAUT.forEach((l) => ajouterRevenu(l));
 
   // Objectifs actifs ce mois-ci
-  const objectifs = etat.donnees.objectifs.filter((o) => !o.archive && o.debut <= cle && cle <= o.fin);
+  const objectifs = etat.donnees.objectifs.filter((o) => !estArchive(o) && o.debut <= cle && cle <= o.fin);
   const lignesObjectifs = objectifs.map((o) => {
     const versements = etat.donnees.versementsTous.filter((v) => v.objectif_id === o.id);
     const propose = suiviObjectif(o, versements, cle).effortRecalcule;

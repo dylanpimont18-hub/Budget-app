@@ -574,11 +574,14 @@ button.ligne:active { background: var(--sable); }
 .objectif-entete .ligne-texte { font-weight: 600; }
 .objectif-chiffres {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
-    gap: 8px;
+    gap: 2px 8px;
     font-size: 0.85rem;
     color: var(--attenue);
 }
+
+.objectif-chiffres > span { white-space: nowrap; }
 
 details.repliable > summary {
     min-height: 44px;

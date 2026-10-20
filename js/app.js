@@ -9,6 +9,7 @@ import {rendreRecurrentes} from './vues/recurrentes.js';
 import {rendreDepenses} from './vues/depenses.js';
 import {initAjoutRapide} from './vues/ajout-rapide.js';
 import {rendreTableau} from './vues/tableau.js';
+import {rendreObjectifs} from './vues/objectifs.js';
 
 const vue = document.getElementById('vue');
 const nav = document.getElementById('onglets');
@@ -18,6 +19,7 @@ const rendus = {
   recurrentes: rendreRecurrentes,
   depenses: rendreDepenses,
   tableau: rendreTableau,
+  objectifs: rendreObjectifs,
 };
 let ongletActif = null;
 

@@ -2,7 +2,7 @@
 import {ajouterRecurrente, modifierRecurrente, retirerDuMois, restaurerDansMois, supprimerRecurrente} from '../db.js';
 import {etat, recharger} from '../etat.js';
 import {formatEUR, libelleMois} from '../calc.js';
-import {el, ouvrirFeuille, toast, champMontant} from '../ui.js';
+import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
 
 const ICONES = ['🏡', '🏦', '⚡', '💧', '🛡️', '📱', '👶', '🍽️', '🧾', '🚗', '💡', '📺', '🏋️', '🐾', '💳', '📦'];
 const SEUIL_SWIPE = 100;
@@ -32,7 +32,7 @@ function rendreListe(conteneur) {
   const lectureSeule = enLectureSeule();
   const total = recurrentes.reduce((t, r) => t + Number(r.montant), 0);
 
-  conteneur.append(
+  ajouter(conteneur, [
     el('div', {class: 'entete-vue'},
       el('h1', {}, 'Récurrentes'),
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
@@ -55,7 +55,7 @@ function rendreListe(conteneur) {
             rendreRevue(conteneur);
           }},
             'Revoir les charges')
-        : null));
+        : null)]);
 }
 
 function ouvrirEdition(ligne) {
