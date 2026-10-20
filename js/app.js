@@ -6,6 +6,7 @@ import {el, toast} from './ui.js';
 import {rendreConnexion, rendreChoixFoyer} from './vues/connexion.js';
 import {rendreOuverture} from './vues/ouverture.js';
 import {rendreRecurrentes} from './vues/recurrentes.js';
+import {rendreDepenses} from './vues/depenses.js';
 
 const vue = document.getElementById('vue');
 const nav = document.getElementById('onglets');
@@ -13,6 +14,7 @@ const btnAjout = document.getElementById('btn-ajout-rapide');
 
 const rendus = {
   recurrentes: rendreRecurrentes,
+  depenses: rendreDepenses,
   // Provisoire : remplacé par le tableau de bord (Task 10)
   tableau: (c) => c.append(
     el('h1', {}, etat.foyer?.nom ?? 'Budget'),

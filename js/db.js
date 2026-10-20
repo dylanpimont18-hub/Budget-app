@@ -241,3 +241,19 @@ export async function supprimerRecurrente(ligneMois) {
       'Charge retirée de ce mois, mais toujours prévue les mois suivants.');
   }
 }
+
+// ── Dépenses ponctuelles ───────────────────────────────────────────────
+
+export async function ajouterDepense(foyerId, {date, montant, categorie_id, membre_id, libelle}) {
+  verifier(await sb.from('depenses').insert({foyer_id: foyerId, date, montant, categorie_id, membre_id, libelle: libelle || null}),
+    'Impossible d\'enregistrer la dépense.');
+}
+
+export async function modifierDepense(id, champs) {
+  verifier(await sb.from('depenses').update({...champs, libelle: champs.libelle || null}).eq('id', id),
+    'Impossible de modifier la dépense.');
+}
+
+export async function supprimerDepense(id) {
+  verifier(await sb.from('depenses').delete().eq('id', id), 'Impossible de supprimer la dépense.');
+}
