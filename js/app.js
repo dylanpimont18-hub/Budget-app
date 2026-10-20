@@ -122,9 +122,12 @@ surAuth((evenement) => {
   }
 });
 
-// Au retour au premier plan (iPhone), on resynchronise : le temps réel a pu être coupé
+// Au retour au premier plan (iPhone), on resynchronise : le temps réel a pu être coupé.
+// Si le mois calendaire a changé pendant que l'app dormait, on repart du début (ouverture du nouveau mois).
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && etat.foyer && etat.donnees) rechargerEnFond();
+  if (document.visibilityState !== 'visible' || !etat.foyer || !etat.donnees) return;
+  if (cleMois() !== etat.moisCourantCle) demarrer();
+  else rechargerEnFond();
 });
 
 // Accès console pour le débogage

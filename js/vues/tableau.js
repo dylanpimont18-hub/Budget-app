@@ -1,5 +1,5 @@
 // Onglet Budget (tableau de bord) : synthèse du mois, budgets par catégorie, graphiques.
-import {modifierBudget} from '../db.js';
+import {modifierBudget, modifierMoisMembre} from '../db.js';
 import {etat, recharger} from '../etat.js';
 import {formatEUR, syntheseMois, niveauBudget, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
 import {el, ouvrirFeuille, toast, champMontant} from '../ui.js';
@@ -147,16 +147,54 @@ function editerBudget(categorie, actuel) {
 
 function blocMembres() {
   const d = etat.donnees;
+  const modifiable = etat.moisCle === etat.moisCourantCle;
   const depenses = totalParMembre(d.depenses);
   return el('div', {class: 'grille-stats'}, etat.membres.map((m) => {
     const mm = d.membresMois.find((x) => x.membre_id === m.id);
-    return el('div', {class: 'carte-stat'},
+    const contenu = [
       el('div', {class: 'etiquette-stat'}, m.prenom),
       el('div', {class: 'valeur-stat montant'}, formatEUR(depenses[m.id] ?? 0)),
       el('div', {class: 'sous-stat'}, 'dépensé ce mois'),
-      el('div', {class: 'sous-stat', style: {marginTop: '6px'}}, `Salaire ${formatEUR(Number(mm?.salaire ?? 0))}`),
-      el('div', {class: 'sous-stat'}, mm?.solde == null ? 'Solde de départ : —' : `Solde de départ ${formatEUR(Number(mm.solde))} (info)`));
+      el('div', {class: 'sous-stat', style: {marginTop: '6px'}},
+        mm ? `Salaire ${formatEUR(Number(mm.salaire))}` : 'Salaire non saisi'),
+      el('div', {class: 'sous-stat'}, mm?.solde == null ? 'Solde de départ : —' : `Solde de départ ${formatEUR(Number(mm.solde))} (info)`),
+    ];
+    return modifiable
+      ? el('button', {class: 'carte-stat', type: 'button', style: {textAlign: 'left', font: 'inherit'},
+          'aria-label': `Modifier salaire et solde de ${m.prenom}`, onclick: () => editerMembre(m, mm)}, contenu)
+      : el('div', {class: 'carte-stat'}, contenu);
   }));
+}
+
+// Membre arrivé après l'ouverture, ou salaire mal saisi
+function editerMembre(membre, mm) {
+  const salaire = champMontant({id: 'mm-salaire', etiquette: 'Salaire touché', valeur: mm?.salaire ?? membre.salaire_defaut});
+  const solde = champMontant({id: 'mm-solde', etiquette: 'Solde actuel du compte', valeur: mm?.solde ?? null,
+    negatif: true, vide: 'null'});
+  const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
+  const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, 'Enregistrer');
+  let feuille;
+  const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
+    e.preventDefault();
+    const s = salaire.valider();
+    const o = solde.valider();
+    if (!s.ok || !o.ok) return;
+    bouton.disabled = true;
+    try {
+      await modifierMoisMembre(etat.foyer.id, etat.donnees.mois.id, membre.id, {salaire: s.valeur, solde: o.valeur});
+      feuille.fermer();
+      toast('Enregistré');
+      await recharger();
+    } catch (err) {
+      message.textContent = err.message;
+      bouton.disabled = false;
+    }
+  }},
+  salaire.element, solde.element,
+  el('p', {class: 'attenue', style: {margin: 0}}, "Le solde est une simple information : il n'entre dans aucun calcul."),
+  message, bouton);
+  feuille = ouvrirFeuille(form, {titre: membre.prenom});
+  salaire.input.focus();
 }
 
 // ── Graphiques ─────────────────────────────────────────────────────────

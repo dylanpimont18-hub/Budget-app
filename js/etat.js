@@ -23,8 +23,12 @@ export function notifier() {
   for (const fn of abonnes) fn(etat);
 }
 
-// Recharge tout ce qu'affichent les vues pour etat.moisCle
+let generation = 0;
+
+// Recharge tout ce qu'affichent les vues pour etat.moisCle.
+// Si un rechargement plus récent a été lancé entre-temps, ce résultat périmé est ignoré.
 export async function recharger() {
+  const numero = ++generation;
   const foyerId = etat.foyer.id;
   const [foyer, mois, categories, objectifs, moisDisponibles] = await Promise.all([
     chargerFoyer(),
@@ -33,6 +37,7 @@ export async function recharger() {
     chargerObjectifs(foyerId),
     listerMois(foyerId),
   ]);
+  if (numero !== generation) return;
   if (foyer) Object.assign(etat, foyer);
   etat.donnees = {
     ...mois,
