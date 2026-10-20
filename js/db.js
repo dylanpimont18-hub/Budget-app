@@ -176,7 +176,10 @@ export async function chargerObjectifs(foyerId) {
 
 // ── Temps réel ─────────────────────────────────────────────────────────
 
-const TABLES_TEMPS_REEL = ['depenses', 'versements', 'mois', 'budgets_mois', 'recurrentes_mois'];
+const TABLES_TEMPS_REEL = [
+  'depenses', 'versements', 'mois', 'budgets_mois', 'recurrentes_mois',
+  'objectifs', 'categories', 'recurrentes', 'revenus_mois', 'mois_membres', 'membres',
+];
 
 export function ecouter(foyerId, cb) {
   const canal = sb.channel(`foyer-${foyerId}`);
@@ -292,4 +295,13 @@ export async function ajouterVersement(foyerId, {objectif_id, mois_cle, montant,
 
 export async function supprimerVersement(id) {
   verifier(await sb.from('versements').delete().eq('id', id), 'Impossible de supprimer le versement.');
+}
+
+// ── Salaire et solde d'un membre pour un mois ──────────────────────────
+
+// Crée la ligne si le membre a rejoint le foyer après l'ouverture du mois
+export async function modifierMoisMembre(foyerId, moisId, membreId, {salaire, solde}) {
+  verifier(await sb.from('mois_membres')
+    .upsert({foyer_id: foyerId, mois_id: moisId, membre_id: membreId, salaire, solde}, {onConflict: 'mois_id,membre_id'}),
+  'Impossible d\'enregistrer le salaire.');
 }

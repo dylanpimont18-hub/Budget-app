@@ -52,13 +52,14 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - supprimerRecurrente(ligne) — retire du mois, désactive le modèle
 - ajouterDepense / modifierDepense / supprimerDepense — dépenses ponctuelles
 - modifierBudget(foyerId, moisId, categorieId, montant) — budget du mois et défaut
+- modifierMoisMembre(foyerId, moisId, membreId, {salaire, solde}) — salaire du mois (upsert)
 - creerObjectif / modifierObjectif / archiverObjectif — objectifs d'épargne
 - ajouterVersement / supprimerVersement — versements (retrait = négatif)
 
 ## js/etat.js
 Store : état courant, notification des vues, rechargement et temps réel.
 - abonner(fn) / notifier() — abonnement des vues
-- recharger() — recharge tout pour le mois affiché
+- recharger() — recharge tout, ignore les réponses périmées
 - changerMois(cle) — change le mois affiché
 - rechargerEnFond() — recharge, erreur en toast
 - demarrerTempsReel() / arreterTempsReel() — Realtime avec anti-rebond 300 ms
@@ -73,7 +74,7 @@ Helpers DOM (jamais d'innerHTML pour des données utilisateur).
 - champMontant(options) — champ montant validé en direct
 
 ## js/app.js
-Démarrage et routage : connexion → foyer → ouverture du mois → onglets.
+Démarrage et routage : connexion → foyer → ouverture du mois → onglets ; redémarre si le mois a changé.
 - afficherOnglet(nom, options) — affiche un onglet
 - seDeconnecter() — déconnexion avec message d'erreur
 
@@ -103,7 +104,7 @@ Bouton « + » flottant.
 - initAjoutRapide(bouton) — ouvre la feuille de saisie rapide
 
 ## js/vues/tableau.js
-Onglet Budget : cartes, budgets par catégorie, par personne, graphiques SVG.
+Onglet Budget : cartes, budgets par catégorie, par personne (salaire modifiable), graphiques SVG.
 - rendreTableau(conteneur) — tableau de bord du mois affiché
 
 ## js/vues/objectifs.js
@@ -122,6 +123,9 @@ RPC `security definer`.
 - creer_foyer(p_prenom) — foyer, code, données initiales
 - rejoindre_foyer(p_code, p_prenom) — adhésion par code
 - ouvrir_mois(p_cle, p_membres, p_revenus, p_versements) — mois idempotent depuis le modèle
+
+## supabase/migrations/004_temps_reel.sql
+Publie toutes les tables partagées du foyer dans Realtime.
 
 ## supabase/tests/rls_et_rpc.sql
 Test SQL (begin … rollback) : RLS, RPC, mois sautés, contraintes.
