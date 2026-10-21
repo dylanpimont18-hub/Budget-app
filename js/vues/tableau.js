@@ -44,14 +44,13 @@ export function rendreTableau(conteneur) {
   });
 
   // Mois passé : la prévision n'a plus de sens, on montre le bilan
+  // Sur ordinateur, les sections se répartissent sur deux colonnes
   ajouter(conteneur, [
-    estMoisCourant() ? cartes(synthese) : bilan(),
-    el('h2', {}, 'Budgets par catégorie'),
-    categories(),
-    el('h2', {}, 'Par personne'),
-    blocMembres(),
-    el('h2', {}, 'Répartition'),
-    graphiques(synthese, {prevision: estMoisCourant()}),
+    el('div', {class: 'grille-ordinateur'},
+      el('section', {}, estMoisCourant() ? cartes(synthese) : bilan()),
+      el('section', {}, el('h2', {}, 'Budgets par catégorie'), categories()),
+      el('section', {}, el('h2', {}, 'Par personne'), blocMembres()),
+      el('section', {}, el('h2', {}, 'Répartition'), graphiques(synthese, {prevision: estMoisCourant()}))),
     piedDePage()]);
 }
 
