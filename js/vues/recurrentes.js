@@ -171,7 +171,7 @@ function ouvrirEdition(ligne) {
     'Nourrice, électricité… : chaque nouveau mois, le dernier montant est proposé et tu le confirmes.'),
   el('div', {}, el('span', {class: 'etiquette'}, 'Icône'), icones),
   el('details', {class: 'repliable', open: Boolean(ligne?.dans_solde)},
-    el('summary', {}, 'Déjà prélevée ?'),
+    el('summary', {}, 'Déjà prélevée ?'),
     prelevee.element,
     el('p', {class: 'attenue', style: {margin: 0}},
       "Cochée, la charge est déjà comprise dans un solde : elle n'est pas retirée une 2e fois (ce mois seulement).")),
@@ -182,7 +182,7 @@ function ouvrirEdition(ligne) {
     el('button', {class: 'btn-secondaire', type: 'button', onclick: (e) =>
       executer(e.currentTarget, () => retirerDuMois(ligne.id), 'Retirée de ce mois')}, 'Retirer de ce mois seulement'),
     el('button', {class: 'btn-danger', type: 'button', onclick: (e) => {
-      if (!confirm(`Supprimer « ${ligne.libelle} » de ce mois et des mois suivants ?`)) return;
+      if (!confirm(`Supprimer « ${ligne.libelle} » de ce mois et des mois suivants ?`)) return;
       executer(e.currentTarget, () => supprimerRecurrente(ligne), 'Charge supprimée');
     }}, 'Supprimer la charge')) : null;
 

@@ -45,6 +45,7 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
   max(budget, spent) minus the payer's expenses dated before `solde_le`, goal transfers). `salaire_recu` is display only.
 - Recurring charges can be personal (`membre_id`, null = shared) and variable (`variable`: each new month copies the
   last amount with `a_confirmer = true` until it is entered).
-- Each member fills in their own part of the month (`mois_membres.renseigne`); `ouvrir_mois` returns `{mois_id, cree}`
+- Each member fills in their own part of the month (`mois_membres.renseigne`), or the other can fill it in for them
+  (`js/vues/part-membre.js`; `membres.paie_mois_precedent` pre-answers « salaire déjà sur le compte ? » with yes); `ouvrir_mois` returns `{mois_id, cree}`
   and adds the caller's part if the month already exists.
 - Address the user with « tu » everywhere in the UI.

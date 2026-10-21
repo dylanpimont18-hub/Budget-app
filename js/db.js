@@ -355,8 +355,9 @@ export async function activerCategorie(foyerId, moisId, categorie, active) {
 
 // ── Profil ─────────────────────────────────────────────────────────────
 
-export async function modifierProfil(membreId, {prenom, salaire_defaut}) {
-  verifier(await sb.from('membres').update({prenom, salaire_defaut}).eq('id', membreId),
+// paie_mois_precedent : le salaire du mois M arrive fin M-1 (la réponse d'ouverture est alors préremplie)
+export async function modifierProfil(membreId, {prenom, salaire_defaut, paie_mois_precedent}) {
+  verifier(await sb.from('membres').update({prenom, salaire_defaut, paie_mois_precedent}).eq('id', membreId),
     "Impossible d'enregistrer ton profil.");
 }
 

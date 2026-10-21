@@ -2,9 +2,10 @@
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
 import {modifierBudget, modifierMoisMembre} from '../db.js';
 import {etat, recharger} from '../etat.js';
-import {formatEUR, syntheseMois, bilanMois, niveauBudget, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
-import {el, ajouter, ouvrirFeuille, toast, champMontant, choixOuiNon} from '../ui.js';
+import {formatEUR, libelleMois, syntheseMois, bilanMois, niveauBudget, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
+import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
 import {selecteurMois, aujourdhui, categorieDe} from './depenses.js';
+import {formulairePart, de} from './part-membre.js';
 import {ouvrirRevenus, ouvrirCategories, ouvrirProfil} from './reglages.js';
 import {ouvrirConfirmation} from './recurrentes.js';
 import {copier} from './connexion.js';
@@ -65,15 +66,24 @@ function bandeaux() {
       el('span', {}, 'Remplis ta part du mois : salaire et solde'),
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => editerMembre(etat.moi, mien)}, 'Remplir')));
   }
+  // La part de l'autre peut aussi être remplie d'ici, si on connaît son salaire et son solde
+  for (const mm of d.membresMois.filter((x) => x.membre_id !== etat.moi.id && !x.renseigne)) {
+    const membre = etat.membres.find((m) => m.id === mm.membre_id);
+    if (!membre) continue;
+    resultat.push(el('div', {class: 'bandeau-info discret', role: 'status'},
+      el('span', {}, `Part ${de(membre.prenom)} pas encore remplie`),
+      el('button', {class: 'btn-secondaire', type: 'button', onclick: () => editerMembre(membre, mm)}, 'Remplir')));
+  }
   for (const r of d.recurrentes.filter((x) => x.a_confirmer)) {
     resultat.push(el('div', {class: 'bandeau-info', role: 'status'},
-      el('span', {}, `${r.icone ?? '📌'} Montant de ${r.libelle} ce mois-ci ?`),
+      el('span', {}, `${r.icone ?? '📌'} Montant de ${r.libelle} ce mois-ci ?`),
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => ouvrirConfirmation(r)}, 'Saisir')));
   }
   for (const mm of d.membresMois) {
     const membre = etat.membres.find((m) => m.id === mm.membre_id);
     if (!membre || !mm.renseigne || mm.salaire_recu || !(Number(mm.salaire) > 0)) continue;
-    const titre = membre.id === etat.moi.id ? 'Ton salaire est arrivé ?' : `Salaire de ${membre.prenom} reçu ?`;
+    const mois = libelleMois(etat.moisCle).split(' ')[0];
+    const titre = membre.id === etat.moi.id ? `Ton salaire de ${mois} est arrivé ?` : `Salaire de ${mois} ${de(membre.prenom)} reçu ?`;
     resultat.push(el('div', {class: 'bandeau-info', role: 'status'},
       el('span', {}, titre),
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => confirmerSalaire(membre, mm)}, 'Oui, confirmer')));
@@ -295,41 +305,26 @@ function blocMembres() {
 
 // Remplir sa part, celle de l'autre, ou corriger une réponse
 function editerMembre(membre, mm) {
-  const soi = membre.id === etat.moi.id;
   const premiereFois = !mm?.renseigne;
-  const salaire = champMontant({id: 'mm-salaire', etiquette: 'Salaire du mois', valeur: mm?.salaire ?? membre.salaire_defaut});
-  const solde = champMontant({id: 'mm-solde', etiquette: soi ? 'Solde actuel de ton compte' : `Solde du compte de ${membre.prenom}`,
-    valeur: mm?.solde ?? null, negatif: true, vide: 'null'});
-  const aide = el('p', {class: 'attenue', style: {margin: 0}});
-  const expliquer = (oui) => {
-    aide.textContent = oui == null ? ''
-      : oui ? 'Il est déjà compris dans le solde : il ne s\'y ajoute pas.' : 'Il sera ajouté au solde dans le calcul.';
-  };
-  let question;
-  if (premiereFois) question = soi ? 'Ton salaire est déjà arrivé ?' : `Salaire de ${membre.prenom} déjà arrivé ?`;
-  else question = 'Salaire déjà compris dans le solde ?';
-  const dansSolde = choixOuiNon({etiquette: question, valeur: premiereFois ? null : mm.salaire_dans_solde,
-    non: premiereFois ? 'Pas encore' : 'Non', surChange: expliquer});
-  expliquer(dansSolde.lire());
+  const part = formulairePart({membre, cle: etat.moisCle, premiereFois,
+    valeurs: {salaire: mm?.salaire, solde: mm?.solde, salaire_dans_solde: mm?.salaire_dans_solde}});
   const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
   const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, 'Enregistrer');
   let feuille;
   const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
     e.preventDefault();
     message.textContent = '';
-    const s = salaire.valider();
-    const o = solde.valider();
-    const oui = dansSolde.lire();
-    if (oui == null) message.textContent = 'Indique si le salaire est déjà arrivé';
-    if (!s.ok || !o.ok || oui == null) return;
+    const r = part.valider();
+    if (!r.ok) return;
+    const {salaire, solde, salaire_dans_solde: oui} = r.valeurs;
     // Nouveau solde : sa date change, les dépenses d'avant y sont considérées comme déduites
-    const soldeChange = premiereFois || o.valeur !== (mm?.solde == null ? null : Number(mm.solde));
-    const soldeLe = o.valeur == null ? null : (soldeChange ? aujourdhui() : mm.solde_le);
+    const soldeChange = premiereFois || solde !== (mm?.solde == null ? null : Number(mm.solde));
+    const soldeLe = solde == null ? null : (soldeChange ? aujourdhui() : mm.solde_le);
     // Déjà dans le solde ⇒ reçu ; si l'on revient sur un « oui », le salaire redevient à confirmer
     const recu = oui || (mm?.salaire_dans_solde ? false : Boolean(mm?.salaire_recu));
     bouton.disabled = true;
     try {
-      await modifierMoisMembre(etat.foyer.id, etat.donnees.mois.id, membre.id, {salaire: s.valeur, solde: o.valeur,
+      await modifierMoisMembre(etat.foyer.id, etat.donnees.mois.id, membre.id, {salaire, solde,
         solde_le: soldeLe, salaire_dans_solde: oui, salaire_recu: recu, renseigne: true});
       feuille.fermer();
       toast('Enregistré');
@@ -339,7 +334,7 @@ function editerMembre(membre, mm) {
       bouton.disabled = false;
     }
   }},
-  dansSolde.element, salaire.element, aide, solde.element,
+  part.element,
   premiereFois ? null : el('p', {class: 'attenue', style: {margin: 0}},
     'Nouveau solde ? Les dépenses d\'avant aujourd\'hui y sont déjà déduites. '
     + 'Coche ensuite dans Récurrentes les charges déjà prélevées.'),

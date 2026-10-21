@@ -66,6 +66,12 @@ begin
   update public.membres set prenom = 'Pirate' where id = current_setting('test.membre_dylan')::uuid;
   get diagnostics n = row_count;
   assert n = 0, 'Amel a pu modifier la ligne de Dylan';
+  update public.membres set paie_mois_precedent = true where id = current_setting('test.membre_dylan')::uuid;
+  get diagnostics n = row_count;
+  assert n = 0, 'Amel a pu changer le réglage de paie de Dylan';
+  update public.membres set paie_mois_precedent = true where user_id = auth.uid();
+  get diagnostics n = row_count;
+  assert n = 1, 'Amel n''a pas pu changer son propre réglage de paie';
 end $$;
 
 -- ── L'intrus ne voit rien et ne peut rien écrire ────────────────────

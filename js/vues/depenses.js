@@ -201,7 +201,7 @@ function ouvrirEdition(depense) {
   });
   const supprimer = el('button', {class: 'btn-danger', type: 'button', style: {marginTop: '8px'}, onclick: async (e) => {
     const bouton = e.currentTarget;
-    if (!confirm('Supprimer cette dépense ?')) return;
+    if (!confirm('Supprimer cette dépense ?')) return;
     bouton.disabled = true;
     try {
       await supprimerDepense(depense.id);
