@@ -115,6 +115,30 @@ test('objectifs', () => {
 
 // ── Rapports ────────────────────────────────────────────────────────────
 
+test('calc.js se charge sur un moteur Intl antérieur à ES2023 (ancien iPhone)', async () => {
+  const Origine = Intl.NumberFormat;
+  // Avant ES2023, maximumFractionDigits sous le minimum de la devise (2 pour l'euro) levait une RangeError
+  Intl.NumberFormat = function (locale, options = {}) {
+    if (options.style === 'currency' && options.maximumFractionDigits < 2 && options.minimumFractionDigits == null) {
+      throw new RangeError('maximumFractionDigits value is out of range.');
+    }
+    return new Origine(locale, options);
+  };
+  try {
+    const ancien = await import('../js/calc.js?moteur-ancien');
+    assert.equal(ancien.formatEUR(120, {entier: true}), '120 €');
+  } finally {
+    Intl.NumberFormat = Origine;
+  }
+});
+
+test("progressionObjectif : le mois en cours, pas terminé, n'est pas jugé en baisse", () => {
+  const o = {id: 'v', cible: 1000, debut: '2026-05', fin: '2026-12'};
+  const r = progressionObjectif(o, [vers('v', '2026-09', 100), vers('v', '2026-10', 20)], ['2026-09', '2026-10'], '2026-10');
+  assert.deepEqual(r[1], {cle: '2026-10', verse: 20, pct: 2, baisse: false, enCours: true});
+  assert.equal(r[0].enCours, false);
+});
+
 test("formatEUR à l'euro près et élision", () => {
   assert.equal(formatEUR(120, {entier: true}), '120 €');
   assert.equal(formatEUR(120.6, {entier: true, signe: true}), '+121 €');
@@ -197,11 +221,11 @@ test("progressionObjectif : % du mois, baisse seulement pendant l'objectif", () 
     vers('v', '2026-08', 50), vers('v', '2026-10', 30), vers('w', '2026-06', 500)],
   ['2026-04', '2026-05', '2026-06', '2026-08', '2026-10']);
   assert.deepEqual(r, [
-    {cle: '2026-04', verse: 0, pct: 0, baisse: false},
-    {cle: '2026-05', verse: 100, pct: 10, baisse: false},
-    {cle: '2026-06', verse: 70, pct: 7, baisse: true},
-    {cle: '2026-08', verse: 50, pct: 5, baisse: true},      // juillet non ouvert : comparé à juin
-    {cle: '2026-10', verse: 30, pct: 3, baisse: false},     // après la fin de l'objectif
+    {cle: '2026-04', verse: 0, pct: 0, baisse: false, enCours: false},
+    {cle: '2026-05', verse: 100, pct: 10, baisse: false, enCours: false},
+    {cle: '2026-06', verse: 70, pct: 7, baisse: true, enCours: false},
+    {cle: '2026-08', verse: 50, pct: 5, baisse: true, enCours: false},    // juillet non ouvert : comparé à juin
+    {cle: '2026-10', verse: 30, pct: 3, baisse: false, enCours: false},    // après la fin de l'objectif
   ]);
 });
 

@@ -46,7 +46,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - evolutionCategories(moisDonnees, categories) — dépenses par catégorie et mois, hausses
 - entreesSorties(donneesMois) — entrées et sorties réelles du mois
 - epargneParMois(versements, objectifs, cles) — versé et prévu au départ
-- progressionObjectif(objectif, versements, cles) — versé et % par mois, baisses
+- progressionObjectif(objectif, versements, cles, moisCourant) — versé et % par mois, baisses
 - raisonsBaisse(courant, precedent, categories, membres) — 3 écarts défavorables en clair
 - projectionObjectif(objectif, versements, moisCourant) — rythme des 3 derniers mois, atteinte
 

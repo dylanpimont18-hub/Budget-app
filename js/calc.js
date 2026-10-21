@@ -19,7 +19,8 @@ export function parseMontant(saisie, {negatif = false} = {}) {
 }
 
 const formateur = new Intl.NumberFormat('fr-FR', {style: 'currency', currency: 'EUR'});
-const formateurEntier = new Intl.NumberFormat('fr-FR', {style: 'currency', currency: 'EUR', maximumFractionDigits: 0});
+const formateurEntier = new Intl.NumberFormat('fr-FR', {style: 'currency', currency: 'EUR',
+  minimumFractionDigits: 0, maximumFractionDigits: 0});   // minimum explicite : sinon RangeError avant ES2023 (anciens iPhone)
 
 // entier : arrondi à l'euro (textes des rapports : « Courses +120 € »)
 export function formatEUR(n, {signe = false, entier = false} = {}) {
@@ -251,16 +252,17 @@ export function epargneParMois(versements, objectifs, cles) {
 }
 
 // cles : mois ouverts, croissants. baisse : % inférieur au mois ouvert précédent, les deux pendant l'objectif.
-export function progressionObjectif(objectif, versements, cles) {
+// Le mois en cours (enCours) n'est pas terminé : il n'est jamais jugé en baisse.
+export function progressionObjectif(objectif, versements, cles, moisCourant = null) {
   const cible = Number(objectif.cible);
   const pendant = (cle) => objectif.debut <= cle && cle <= objectif.fin;
   const lignes = cles.map((cle) => {
     const verse = sommeMontants(versements.filter((v) => v.objectif_id === objectif.id && v.mois_cle === cle));
-    return {cle, verse, pct: arrondi((verse / cible) * 100), baisse: false};
+    return {cle, verse, pct: arrondi((verse / cible) * 100), baisse: false, enCours: cle === moisCourant};
   });
   lignes.forEach((l, i) => {
     const avant = lignes[i - 1];
-    l.baisse = Boolean(avant) && pendant(l.cle) && pendant(avant.cle) && l.pct < avant.pct;
+    l.baisse = Boolean(avant) && !l.enCours && pendant(l.cle) && pendant(avant.cle) && l.pct < avant.pct;
   });
   return lignes;
 }
