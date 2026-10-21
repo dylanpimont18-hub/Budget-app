@@ -62,13 +62,13 @@ export function formulaireDepense({depense = null, onValider, prefixe = 'depense
   const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
 
   const grille = el('div', {class: 'grille-choix', role: 'group', 'aria-label': 'Catégorie'},
-    categories.map((c) => el('button', {type: 'button', 'aria-pressed': String(c.id === categorieId), onclick: (e) => {
+    categories.map((c) => el('button', {type: 'button', dataset: {id: c.id}, 'aria-pressed': String(c.id === categorieId), onclick: (e) => {
       categorieId = c.id;
       for (const b of grille.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
     }}, el('span', {class: 'ico', 'aria-hidden': 'true'}, c.icone ?? '•'), c.nom)));
 
   const payeurs = el('div', {class: 'segment', role: 'group', 'aria-label': 'Payé par'},
-    etat.membres.map((m) => el('button', {type: 'button', 'aria-pressed': String(m.id === membreId), onclick: (e) => {
+    etat.membres.map((m) => el('button', {type: 'button', dataset: {id: m.id}, 'aria-pressed': String(m.id === membreId), onclick: (e) => {
       membreId = m.id;
       for (const b of payeurs.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
     }}, m.prenom)));
@@ -167,6 +167,20 @@ const formatJourCourt = new Intl.DateTimeFormat('fr-FR', {day: 'numeric', month:
 
 // Formulaire du panneau, conservé d'un rendu à l'autre (le temps réel ne doit pas effacer une saisie en cours)
 let panneau = null;   // {form, signature}
+let defilementPanneau = 0;
+
+// Une catégorie ou un prénom a changé : le formulaire est reconstruit en reprenant la saisie en cours
+function reprendreSaisie(ancien, nouveau) {
+  for (const champ of ['montant', 'libelle', 'date']) {
+    const source = ancien.querySelector(`#panneau-depense-${champ}`);
+    const cible = nouveau.querySelector(`#panneau-depense-${champ}`);
+    if (source && cible) cible.value = source.value;
+  }
+  nouveau.querySelector('details').open = ancien.querySelector('details').open;
+  for (const choisi of ancien.querySelectorAll('[aria-pressed="true"][data-id]')) {
+    nouveau.querySelector(`[data-id="${CSS.escape(choisi.dataset.id)}"]`)?.click();
+  }
+}
 
 function formulairePanneau() {
   const signature = [...etat.donnees.categories.map((c) => `${c.id}:${c.active}:${c.nom}:${c.icone}`),
@@ -176,6 +190,7 @@ function formulairePanneau() {
       await ajouterDepense(etat.foyer.id, champs);
       retenirPayeur(champs.membre_id);
       panneau = null;   // le rendu suivant repart d'un formulaire vide, pour enchaîner les tickets
+      defilementPanneau = 0;
       toast(`${formatEUR(champs.montant)} ajoutés à ${categorieDe(champs.categorie_id).nom}`);
       try {
         await recharger();
@@ -185,6 +200,7 @@ function formulairePanneau() {
       }
       document.getElementById('panneau-depense-montant')?.focus();
     }});
+    if (panneau) reprendreSaisie(panneau.form, form);
     panneau = {form, signature};
   }
   return panneau.form;
@@ -217,6 +233,11 @@ function rendreDepensesOrdinateur(conteneur) {
           el('td', {class: 'montant'}, formatEUR(g.total))),
         ...g.depenses.map(ligne)]);
 
+  // Le panneau est reconstruit à chaque rendu : on lui rend sa position de défilement
+  const aside = el('aside', {class: 'panneau-depenses', onscroll: (e) => { defilementPanneau = e.currentTarget.scrollTop; }},
+    el('section', {class: 'carte'}, el('h2', {}, 'Nouvelle dépense'), formulairePanneau()),
+    el('section', {class: 'carte'}, el('h2', {}, `Budgets · ${libelleMois(etat.moisCle)}`), etatBudgets()));
+
   conteneur.append(el('div', {class: 'disposition-depenses'},
     el('div', {},
       selecteurMois(),
@@ -231,9 +252,8 @@ function rendreDepensesOrdinateur(conteneur) {
               el('th', {scope: 'col'}, 'Qui'), el('th', {scope: 'col', class: 'montant'}, 'Montant'))),
             el('tbody', {}, corps))
         : el('p', {class: 'vide-liste'}, 'Aucune dépense ce mois-ci.')),
-    el('aside', {class: 'panneau-depenses'},
-      el('section', {class: 'carte'}, el('h2', {}, 'Nouvelle dépense'), formulairePanneau()),
-      el('section', {class: 'carte'}, el('h2', {}, `Budgets · ${libelleMois(etat.moisCle)}`), etatBudgets()))));
+    aside));
+  aside.scrollTop = defilementPanneau;
 }
 
 // Dépensé / budget par catégorie du mois affiché, mêmes niveaux que l'onglet Budget

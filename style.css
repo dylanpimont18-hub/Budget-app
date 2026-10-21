@@ -35,6 +35,11 @@
     --rayon-petit: 12px;
     --hauteur-nav: 64px;
     --bas-securite: env(safe-area-inset-bottom, 0px);
+
+    /* Ordinateur et impression */
+    --survol-menu: rgba(255, 236, 205, 0.06);
+    --ombre-fenetre: 0 24px 60px rgba(51, 37, 29, 0.3);
+    --papier-impression: #fff;
 }
 
 * { box-sizing: border-box; }
@@ -763,7 +768,7 @@ details.carte[open] > summary { margin-bottom: 4px; }
         text-align: left;
     }
     .onglets > button span { font-size: 1.15rem; }
-    .onglets > button:hover { background: rgba(255, 236, 205, 0.06); color: var(--chene-texte); }
+    .onglets > button:hover { background: var(--survol-menu); color: var(--chene-texte); }
     .onglets > button[aria-current="page"] { background: var(--noyer-clair); }
     .onglets > button[aria-current="page"]::before {
         top: 12px;
@@ -790,7 +795,7 @@ details.carte[open] > summary { margin-bottom: 4px; }
         max-height: 88dvh;
         border-radius: 22px;
         padding: 4px 20px 20px;
-        box-shadow: 0 24px 60px rgba(51, 37, 29, 0.3);
+        box-shadow: var(--ombre-fenetre);
         transform: translateY(16px);
     }
     .fond-feuille.ouverte .feuille { transform: none; }
@@ -869,12 +874,12 @@ details.carte[open] > summary { margin-bottom: 4px; }
 
 @media print {
     @page { margin: 14mm; }
-    body { background: #fff; color: var(--noyer); padding: 0; }
+    body { background: var(--papier-impression); color: var(--noyer); padding: 0; }
     .onglets, .btn-ajout-rapide, .bandeau-hors-ligne, .bandeau-info, .toast, #feuilles,
     .outils-rapport, .ecran-seulement, .vue button, .vue select { display: none !important; }
     .vue { max-width: none; padding: 0; }
     .date-impression { display: block; }
-    .carte, .section-rapport { background: #fff; break-inside: avoid; }
+    .carte, .section-rapport { background: var(--papier-impression); break-inside: avoid; }
     .carte-stat { break-inside: avoid; }
     .tableau-rapport tr, .graphique-barres, .projection, .objectif-entete { break-inside: avoid; }
     .section-rapport > h2, .titre-graphique { break-after: avoid; }
