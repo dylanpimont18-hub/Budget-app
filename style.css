@@ -35,6 +35,11 @@
     --rayon-petit: 12px;
     --hauteur-nav: 64px;
     --bas-securite: env(safe-area-inset-bottom, 0px);
+
+    /* Ordinateur et impression */
+    --survol-menu: rgba(255, 236, 205, 0.06);
+    --ombre-fenetre: 0 24px 60px rgba(51, 37, 29, 0.3);
+    --papier-impression: #fff;
 }
 
 * { box-sizing: border-box; }
@@ -712,3 +717,217 @@ details.repliable > summary {
 .bandeau-info.discret { background: var(--blanc); color: var(--txt); box-shadow: inset 4px 0 0 var(--filet); border: 1px solid var(--filet); font-weight: 500; }
 details.carte > summary { min-height: 44px; }
 details.carte[open] > summary { margin-bottom: 4px; }
+
+/* ── Ordinateur (≥ 1024 px) ──────────────────────────────────────────── */
+/* Sous ce seuil rien ne change : le titre du menu et l'onglet Rapports n'existent pas sur téléphone. */
+
+.onglets-titre, .onglets > button[data-onglet="rapports"] { display: none; }
+
+@media (min-width: 1024px) {
+    :root { --largeur-menu: 232px; }
+
+    body {
+        padding-left: var(--largeur-menu);
+        padding-bottom: 32px;
+    }
+
+    .vue {
+        max-width: 1200px;
+        padding: 32px 40px;
+    }
+
+    /* La barre du bas devient un menu latéral fixe */
+    .onglets {
+        top: 0;
+        right: auto;
+        width: var(--largeur-menu);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 28px 14px;
+    }
+    .onglets-titre {
+        display: block;
+        margin: 0 10px 24px;
+        font-family: var(--serif);
+        font-optical-sizing: auto;
+        font-weight: 600;
+        font-size: 1.35rem;
+        line-height: 1.2;
+        color: var(--chene-texte);
+    }
+    .onglets > button, .onglets > button[data-onglet="rapports"] {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 12px;
+        min-height: 48px;
+        padding: 0 14px;
+        border-radius: var(--rayon-petit);
+        font-size: 0.98rem;
+        text-align: left;
+    }
+    .onglets > button span { font-size: 1.15rem; }
+    .onglets > button:hover { background: var(--survol-menu); color: var(--chene-texte); }
+    .onglets > button[aria-current="page"] { background: var(--noyer-clair); }
+    .onglets > button[aria-current="page"]::before {
+        top: 12px;
+        bottom: 12px;
+        left: 0;
+        right: auto;
+        width: 3px;
+        height: auto;
+        border-radius: 0 3px 3px 0;
+    }
+
+    .btn-ajout-rapide { right: 32px; bottom: 32px; }
+    body[data-onglet="depenses"] .btn-ajout-rapide { display: none; }
+
+    .toast {
+        left: calc(50% + var(--largeur-menu) / 2);
+        bottom: 32px;
+    }
+
+    /* Les feuilles du bas deviennent des fenêtres centrées */
+    .fond-feuille { align-items: center; padding: 24px; }
+    .feuille {
+        max-width: 520px;
+        max-height: 88dvh;
+        border-radius: 22px;
+        padding: 4px 20px 20px;
+        box-shadow: var(--ombre-fenetre);
+        transform: translateY(16px);
+    }
+    .fond-feuille.ouverte .feuille { transform: none; }
+
+    button.ligne:hover, button.carte:hover { background: var(--sable); }
+}
+
+/* ── Rapports (ordinateur) ───────────────────────────────────────────── */
+
+.entete-rapport {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.entete-rapport h1 { margin: 0; }
+.entete-rapport h1::first-letter { text-transform: uppercase; }
+.date-impression { display: none; margin: 4px 0 0; }
+.outils-rapport { display: flex; align-items: flex-start; gap: 12px; }
+.outils-rapport > .btn-secondaire { width: auto; }
+.selecteur-periode { display: flex; flex-direction: column; gap: 8px; min-width: 420px; }
+.selecteur-periode .segment > button { padding: 0 12px; }
+.choix-mois { display: block; }
+
+.section-rapport { padding: 20px 24px; margin-bottom: 20px; }
+.section-rapport > h2 { margin-bottom: 4px; }
+.section-rapport > .attenue { margin: 0 0 12px; }
+.resume-rapport { margin: 0 0 4px; }
+.titre-graphique { margin: 20px 0 4px; }
+
+.defilement-x { overflow-x: auto; }
+.tableau-rapport {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin-top: 8px;
+}
+.tableau-rapport th, .tableau-rapport td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--filet);
+    text-align: left;
+    vertical-align: top;
+}
+.tableau-rapport thead th { color: var(--attenue); font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.tableau-rapport tbody th { font-weight: 500; white-space: nowrap; }
+.tableau-rapport .montant { text-align: right; }
+.tableau-rapport td.hausse { background: var(--orange-f); color: var(--orange-t); font-weight: 600; }
+.tableau-rapport td.baisse { color: var(--orange-t); font-weight: 600; }
+.tableau-rapport td.moyenne { color: var(--attenue); }
+.tableau-rapport tr.inactive th { color: var(--attenue); font-style: italic; }
+.tableau-rapport tr.ligne-total th, .tableau-rapport tr.ligne-total td { font-weight: 600; border-top: 1.5px solid var(--noyer); }
+.tableau-rapport tr.ligne-prevu th, .tableau-rapport tr.ligne-prevu td { color: var(--attenue); }
+.tableau-rapport tr.ligne-choix { cursor: pointer; }
+.tableau-rapport tr.ligne-choix:hover { background: var(--fond); }
+.tableau-rapport tr.ligne-choix.choisie { background: var(--sable); }
+.tableau-rapport tr.ligne-choix.choisie th { font-weight: 700; }
+.tableau-rapport td.pourquoi { min-width: 220px; color: var(--txt); }
+.tableau-objectif td.pourquoi { width: 40%; }
+.tableau-rapport .raison { white-space: nowrap; }
+.non-ouvert { color: var(--attenue); font-style: italic; font-size: 0.8rem; }
+.estime { color: var(--orange-t); font-size: 0.75rem; font-weight: 600; }
+
+.graphique-barres { max-width: 760px; color: var(--txt); }
+.graphique-barres svg { display: block; width: 100%; height: auto; }
+.legende-ligne { display: flex; gap: 16px; margin: 4px 0 8px; }
+
+.bloc-objectif .objectif-entete { margin-bottom: 4px; }
+.bloc-objectif .objectif-entete h2 { font-size: 1.3rem; }
+.projection { margin-top: 12px; padding: 10px 14px; border-radius: var(--rayon-petit); background: var(--sable); }
+.projection p { margin: 2px 0; }
+.archives-rapport { margin-top: 8px; }
+
+/* ── Impression (rapport) ────────────────────────────────────────────── */
+
+@media print {
+    @page { margin: 14mm; }
+    body { background: var(--papier-impression); color: var(--noyer); padding: 0; }
+    .onglets, .btn-ajout-rapide, .bandeau-hors-ligne, .bandeau-info, .toast, #feuilles,
+    .outils-rapport, .ecran-seulement, .vue button, .vue select { display: none !important; }
+    .vue { max-width: none; padding: 0; }
+    .date-impression { display: block; }
+    .carte, .section-rapport { background: var(--papier-impression); break-inside: avoid; }
+    .carte-stat { break-inside: avoid; }
+    .tableau-rapport tr, .graphique-barres, .projection, .objectif-entete { break-inside: avoid; }
+    .section-rapport > h2, .titre-graphique { break-after: avoid; }
+    .defilement-x { overflow: visible; }
+    .tableau-rapport tr.ligne-choix.choisie { background: none; }
+    .jauge, .jauge > span, .tableau-rapport td.hausse, .projection, .puce { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    details.archives-rapport > summary { display: none; }
+}
+
+/* ── Onglets en largeur (ordinateur) ─────────────────────────────────── */
+/* Sur téléphone, .grille-ordinateur et .colonne-etroite sont de simples blocs : rien ne change. */
+
+@media (min-width: 1024px) {
+    .grille-ordinateur {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 24px;
+        align-items: start;
+    }
+    .grille-ordinateur > section > .titre-groupe:first-child { margin-top: 0; }
+    .grille-ordinateur .grille-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .colonne-etroite { max-width: 560px; margin: 0 auto; }
+    .vue > .actions, .vue > .btn-secondaire { max-width: 360px; }
+    .carte-swipe { cursor: grab; }
+    .carte-swipe:active { cursor: grabbing; }
+
+    .disposition-depenses {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 400px;
+        gap: 28px;
+        align-items: start;
+    }
+    .panneau-depenses {
+        position: sticky;
+        top: 24px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+    }
+    .panneau-depenses .carte { padding: 18px; }
+    .tableau-depenses { background: var(--blanc); border: 1px solid var(--filet); border-radius: var(--rayon); overflow: hidden; }
+    .tableau-depenses td { vertical-align: middle; }
+    .tableau-depenses tr.ligne-groupe th, .tableau-depenses tr.ligne-groupe td {
+        background: var(--fond);
+        color: var(--attenue);
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .etat-budgets { list-style: none; margin: 0; padding: 0; }
+    .etat-budgets > li + li { margin-top: 10px; }
+    .etat-budget-ligne { display: flex; justify-content: space-between; gap: 8px; font-size: 0.9rem; }
+}

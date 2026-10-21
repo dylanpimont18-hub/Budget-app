@@ -30,13 +30,13 @@ export function rendreObjectifs(conteneur) {
   ajouter(conteneur, [
     el('div', {class: 'entete-vue'}, el('h1', {}, 'Objectifs')),
     actifs.length
-      ? actifs.map(carteObjectif)
+      ? el('div', {class: 'grille-ordinateur'}, actifs.map(carteObjectif))
       : el('p', {class: 'vide-liste'}, 'Aucun objectif en cours. Crées-en un pour suivre ton épargne.'),
     el('button', {class: 'btn-secondaire', type: 'button', onclick: () => ouvrirFormulaire(null)}, '+ Nouvel objectif'),
     archives.length
       ? el('details', {class: 'repliable', style: {marginTop: '16px'}},
           el('summary', {}, `Archivés (${archives.length})`),
-          archives.map(carteObjectif))
+          el('div', {class: 'grille-ordinateur'}, archives.map(carteObjectif)))
       : null]);
 }
 
