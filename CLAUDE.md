@@ -13,7 +13,7 @@ Start with `CODEBASE_MAP.md`: it lists every file and its main functions. Spec a
 ## Commands
 
 ```bash
-npm test                     # node --test on tests/*.test.js (pure logic in js/calc.js)
+npm test                     # node --test on tests/*.test.js (pure logic in js/calc.js and js/rapport.js)
 python -m http.server 8000   # local preview at http://localhost:8000
 ```
 
@@ -29,7 +29,8 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
   Rapports on desktop only).
 - `js/vues/*.js` — one module per screen; each tab re-renders on every `notifier()`.
 - `js/vues/rapports.js` — loads its own range of months with `db.chargerPlage` (never touches `recharger()` or
-  `etat.moisCle`), ignores stale responses and reloads on `surTempsReel`; every figure comes from `calc.js`.
+  `etat.moisCle`), ignores stale responses and reloads on `surTempsReel`. Figures are assembled by the pure
+  `js/rapport.js` (`construireRapport`), which also produces the Markdown / JSON exports: screen and exports never differ.
 - Supabase: every table carries `foyer_id`; RLS through `est_membre(foyer_id)`; household creation/joining and month
   opening go through `security definer` RPCs (`creer_foyer`, `rejoindre_foyer`, `ouvrir_mois`, idempotent).
 - Recurring charges and category budgets have a template (`recurrentes`, `categories.budget_defaut`) copied into each
