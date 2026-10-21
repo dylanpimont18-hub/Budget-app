@@ -61,12 +61,20 @@ export function rechargerEnFond() {
 
 let desabonnerTempsReel = null;
 let minuteur = null;
+const ecouteursTempsReel = new Set();
+
+// Prévenu à chaque événement temps réel (les rapports rechargent leur propre plage de mois)
+export function surTempsReel(fn) {
+  ecouteursTempsReel.add(fn);
+  return () => ecouteursTempsReel.delete(fn);
+}
 
 export function demarrerTempsReel() {
   arreterTempsReel();
   desabonnerTempsReel = ecouter(etat.foyer.id, () => {
     clearTimeout(minuteur);
     minuteur = setTimeout(rechargerEnFond, 300);
+    for (const fn of ecouteursTempsReel) fn();
   });
 }
 
