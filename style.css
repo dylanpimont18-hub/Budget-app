@@ -931,3 +931,25 @@ details.carte[open] > summary { margin-bottom: 4px; }
     .etat-budgets > li + li { margin-top: 10px; }
     .etat-budget-ligne { display: flex; justify-content: space-between; gap: 8px; font-size: 0.9rem; }
 }
+
+/* ── Mise à jour de l'app ────────────────────────────────────────────── */
+
+.bandeau-mise-a-jour {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--vert-f);
+    color: var(--vert-t);
+    font-weight: 600;
+}
+.bandeau-mise-a-jour > .btn-primaire { width: auto; flex: 0 0 auto; min-height: 44px; }
+.version-app { margin: 8px 0 0; text-align: center; color: var(--attenue); font-size: 0.75rem; }
+
+@media print {
+    .bandeau-mise-a-jour { display: none !important; }
+}

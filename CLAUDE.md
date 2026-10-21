@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 **Budget familial** is a French-language PWA for a couple's monthly budget, shared in real time. Static front end
-(native ES modules, no build, no npm dependencies) served by GitHub Pages; data in Supabase (Auth email/password,
+(native ES modules, no build, no npm dependencies) served by GitHub Pages through `.github/workflows/pages.yml`
+(tests, then publish on every push to `main`; the commit SHA is written into `js/version.js` and `version.json`); data in Supabase (Auth email/password,
 Postgres with row-level security per household, Realtime). `supabase-js` is loaded from jsDelivr at a pinned version.
 
 Start with `CODEBASE_MAP.md`: it lists every file and its main functions. Spec and plan live in `docs/superpowers/`.
@@ -56,3 +57,6 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
   (`js/vues/part-membre.js`; `membres.paie_mois_precedent` pre-answers « salaire déjà sur le compte ? » with yes); `ouvrir_mois` returns `{mois_id, cree}`
   and adds the caller's part if the month already exists.
 - Address the user with « tu » everywhere in the UI.
+- Updates: never bump a version by hand. `js/mise-a-jour.js` compares `VERSION` with `version.json` and offers
+  « Mettre à jour », which re-downloads every listed file (`fetch(…, {cache: 'reload'})`) before reloading, since
+  GitHub Pages caches files for 10 min. A new top-level file the app needs must be copied in the workflow.
