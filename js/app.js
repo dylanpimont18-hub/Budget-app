@@ -54,10 +54,17 @@ export function afficherOnglet(nom, options) {
   window.scrollTo(0, 0);
 }
 
+// Un champ conservé d'un rendu à l'autre (formulaire du panneau Dépenses) garde le focus et le curseur
 function rendreOngletActif(options) {
   if (!ongletActif) return;
+  const focus = document.activeElement;
+  const curseur = focus?.selectionStart != null ? [focus.selectionStart, focus.selectionEnd] : null;
   vue.replaceChildren();
   rendus[ongletActif]?.(vue, options);
+  if (focus && focus !== document.body && vue.contains(focus) && document.activeElement !== focus) {
+    focus.focus({preventScroll: true});
+    if (curseur) focus.setSelectionRange?.(...curseur);
+  }
 }
 
 nav.addEventListener('click', (e) => {

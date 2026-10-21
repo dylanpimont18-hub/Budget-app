@@ -883,3 +883,46 @@ details.carte[open] > summary { margin-bottom: 4px; }
     .jauge, .jauge > span, .tableau-rapport td.hausse, .projection, .puce { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     details.archives-rapport > summary { display: none; }
 }
+
+/* ── Onglets en largeur (ordinateur) ─────────────────────────────────── */
+/* Sur téléphone, .grille-ordinateur et .colonne-etroite sont de simples blocs : rien ne change. */
+
+@media (min-width: 1024px) {
+    .grille-ordinateur {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 24px;
+        align-items: start;
+    }
+    .grille-ordinateur > section > .titre-groupe:first-child { margin-top: 0; }
+    .grille-ordinateur .grille-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .colonne-etroite { max-width: 560px; margin: 0 auto; }
+    .vue > .actions, .vue > .btn-secondaire { max-width: 360px; }
+    .carte-swipe { cursor: grab; }
+    .carte-swipe:active { cursor: grabbing; }
+
+    .disposition-depenses {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 400px;
+        gap: 28px;
+        align-items: start;
+    }
+    .panneau-depenses {
+        position: sticky;
+        top: 24px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+    }
+    .panneau-depenses .carte { padding: 18px; }
+    .tableau-depenses { background: var(--blanc); border: 1px solid var(--filet); border-radius: var(--rayon); overflow: hidden; }
+    .tableau-depenses td { vertical-align: middle; }
+    .tableau-depenses tr.ligne-groupe th, .tableau-depenses tr.ligne-groupe td {
+        background: var(--fond);
+        color: var(--attenue);
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .etat-budgets { list-style: none; margin: 0; padding: 0; }
+    .etat-budgets > li + li { margin-top: 10px; }
+    .etat-budget-ligne { display: flex; justify-content: space-between; gap: 8px; font-size: 0.9rem; }
+}
