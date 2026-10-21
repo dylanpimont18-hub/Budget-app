@@ -161,14 +161,16 @@ export async function chargerMois(foyerId, cle) {
   return donnees;
 }
 
-// Toutes les lignes d'une requête, par pages de 1000 (limite de Supabase par réponse)
-async function toutesLesLignes(requete, message) {
+// Toutes les lignes d'une requête, par pages de 1000 (limite de Supabase par réponse).
+// Une ligne ajoutée entre deux pages peut décaler la suivante : les doublons sont écartés par clé,
+// et le rechargement déclenché par le temps réel rattrape une ligne sautée.
+async function toutesLesLignes(requete, message, cle = (l) => l.id) {
   const page = 1000;
-  const lignes = [];
+  const lignes = new Map();
   for (let debut = 0; ; debut += page) {
     const lot = verifier(await requete().range(debut, debut + page - 1), message);
-    lignes.push(...lot);
-    if (lot.length < page) return lignes;
+    for (const l of lot) lignes.set(cle(l), l);
+    if (lot.length < page) return [...lignes.values()];
   }
 }
 
@@ -187,7 +189,7 @@ export async function chargerPlage(foyerId, debut, fin) {
   const message = 'Impossible de charger les données du rapport.';
   const [membresMois, revenus, recurrentes, depenses, versements] = await Promise.all([
     toutesLesLignes(() => sb.from('mois_membres').select('mois_id, membre_id, salaire').in('mois_id', ids)
-      .order('mois_id').order('membre_id'), message),
+      .order('mois_id').order('membre_id'), message, (l) => `${l.mois_id}:${l.membre_id}`),
     toutesLesLignes(() => sb.from('revenus_mois').select('id, mois_id, libelle, montant').in('mois_id', ids).order('id'), message),
     toutesLesLignes(() => sb.from('recurrentes_mois')
       .select('id, mois_id, recurrente_id, libelle, icone, montant, variable, a_confirmer, membre_id').in('mois_id', ids)

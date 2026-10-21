@@ -14,6 +14,12 @@ const COULEUR_DEPENSES = COULEURS[0];
 const formatJour = new Intl.DateTimeFormat('fr-FR', {day: 'numeric', month: 'long', year: 'numeric'});
 const formatPct = (x) => `${x.toLocaleString('fr-FR', {maximumFractionDigits: 1})} %`;
 const nomMois = (cle) => libelleMois(cle).split(' ')[0];
+const dateImpression = () => `Imprimé le ${formatJour.format(new Date())}`;
+
+// Le rapport a pu être affiché la veille : la date est celle de l'impression
+globalThis.addEventListener?.('beforeprint', () => {
+  for (const n of document.querySelectorAll('.date-impression')) n.textContent = dateImpression();
+});
 
 // Période choisie (conservée en changeant d'onglet) : 'six' derniers mois, 'annee' en cours ou 'plage' de … à …
 let periode = {type: 'six'};
@@ -85,6 +91,7 @@ function redessiner() {
 
 function changerPeriode(nouvelle) {
   periode = nouvelle;
+  erreur = null;   // l'erreur concernait l'ancienne période
   charger();
   redessiner();
 }
@@ -141,7 +148,7 @@ function entete(debut, fin) {
   return el('header', {class: 'entete-rapport'},
     el('div', {},
       el('h1', {}, titre(debut, fin)),
-      el('p', {class: 'attenue date-impression'}, `Imprimé le ${formatJour.format(new Date())}`)),
+      el('p', {class: 'attenue date-impression'}, dateImpression())),
     el('div', {class: 'outils-rapport'},
       selecteurPeriode(debut, fin),
       el('button', {class: 'btn-secondaire', type: 'button', onclick: () => window.print()}, '🖨 Imprimer')));

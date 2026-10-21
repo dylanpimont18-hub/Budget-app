@@ -256,6 +256,13 @@ test('raisonsBaisse : charges nouvelles ou en hausse, jamais une charge à confi
   assert.deepEqual(raisonsBaisse(courant, PRECEDENT, CATS_R, MEMBRES), ['Courses +120 €', 'Nourrice +80 €', 'Assurance +25 €']);
 });
 
+test("raisonsBaisse : une charge n'est pas comparée à l'estimation du mois précédent", () => {
+  const vide = {membresMois: [], revenus: [], recurrentes: [], depenses: []};
+  // Nourrice : 400 € recopiés (à confirmer) le mois précédent, 480 € confirmés ce mois-ci
+  assert.deepEqual(raisonsBaisse({...vide, recurrentes: [{recurrente_id: 'r3', libelle: 'Nourrice', montant: 480}]},
+    {...vide, recurrentes: [{recurrente_id: 'r3', libelle: 'Nourrice', montant: 400, a_confirmer: true}]}, CATS_R, MEMBRES), []);
+});
+
 test('raisonsBaisse : revenu en baisse, seuil de 20 € inclus, rien → []', () => {
   const vide = {membresMois: [], revenus: [], recurrentes: [], depenses: []};
   assert.deepEqual(raisonsBaisse({...vide, revenus: [{libelle: 'Primes', montant: 170}]},

@@ -270,7 +270,7 @@ export function progressionObjectif(objectif, versements, cles, moisCourant = nu
 const SEUIL_RAISON = 20;
 
 // Ce qui a pesé sur le mois par rapport au précédent : jusqu'à 3 écarts défavorables d'au moins 20 €, du plus gros au plus petit.
-// Une charge encore à confirmer n'est jamais citée (son montant n'est qu'une estimation).
+// Une charge encore à confirmer, ce mois-ci ou le précédent, n'est jamais citée (son montant n'est qu'une estimation).
 export function raisonsBaisse(courant, precedent, categories, membres) {
   const ecarts = [];
   const plus = (nom, ecart) => ecarts.push({texte: `${nom} ${formatEUR(ecart, {entier: true, signe: true})}`, ecart});
@@ -289,7 +289,8 @@ export function raisonsBaisse(courant, precedent, categories, membres) {
 
   const cleCharge = (r) => r.recurrente_id ?? `libelle:${r.libelle}`;
   const chargesAvant = totaux(precedent.recurrentes, cleCharge);
-  for (const r of courant.recurrentes.filter((x) => !x.a_confirmer)) {
+  const estimeesAvant = new Set(precedent.recurrentes.filter((x) => x.a_confirmer).map(cleCharge));
+  for (const r of courant.recurrentes.filter((x) => !x.a_confirmer && !estimeesAvant.has(cleCharge(x)))) {
     plus(r.libelle, arrondi(Number(r.montant) - (chargesAvant.get(cleCharge(r)) ?? 0)));
   }
 
