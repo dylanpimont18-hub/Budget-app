@@ -50,6 +50,14 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - raisonsBaisse(courant, precedent, categories, membres) — 3 écarts défavorables en clair
 - projectionObjectif(objectif, versements, moisCourant) — rythme des 3 derniers mois, atteinte
 
+## js/rapport.js
+Rapport d'une période, pur (testé) : assemble les chiffres de calc.js pour l'onglet Rapports et les exports.
+- construireRapport({debut, fin, parMois, reference, …}) — évolution, épargne, blocs par objectif
+- texteProjection(objectif, projection) — phrases de la projection
+- rapportEnMarkdown(rapport, {genereLe}) — export lisible, à coller dans une IA
+- rapportEnJson(rapport, {genereLe}) — export brut, montants en euros
+- libellePeriode / libelleCourt / formatPct / statutObjectif — libellés partagés
+
 ## js/db.js
 Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - session() / surAuth(cb) — session courante, écoute de l'auth
@@ -93,6 +101,7 @@ Helpers DOM (jamais d'innerHTML pour des données utilisateur).
 - estOrdinateur() / surChangementOrdinateur(cb) — seuil 1024 px, hors impression
 - ajouter(parent, enfants) — ajoute en aplatissant, ignore null
 - ouvrirFeuille(contenu, {titre}) — feuille du bas, fenêtre sur ordinateur
+- telecharger(nom, contenu, type) — télécharge un fichier généré
 - toast(message, {type}) — message temporaire
 - versSaisie(n) — nombre au format de saisie
 - champMontant(options) — champ montant validé en direct
@@ -157,7 +166,8 @@ Onglet Objectifs : suivi, versements / retraits, archives.
 - estArchive(objectif) — archivé, atteint ou échu
 
 ## js/vues/rapports.js
-Onglet Rapports (ordinateur seulement) : période, évolution des dépenses, épargne versée, un bloc par objectif, impression.
+Onglet Rapports (ordinateur seulement) : période, évolution des dépenses, épargne versée, un bloc par objectif, impression,
+export (copie Markdown pour une IA, fichiers .md et .json).
 - rendreRapports(conteneur) — rapport de la période choisie
 - quitterRapports() — coupe chargement et temps réel
 
