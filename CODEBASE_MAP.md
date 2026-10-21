@@ -10,13 +10,13 @@ Guide pour Claude Code : architecture, commandes, conventions.
 Coquille : `#vue`, barre d'onglets `#onglets`, bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
 
 ## style.css
-Jetons terracotta (`:root`) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques, bandeaux.
+Jetons « atelier d'ébéniste » (`:root` : lichen, noyer, chêne, mousse, miel, cèdre) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques, bandeaux.
 
 ## manifest.json
-Métadonnées PWA « Budget familial » (couleurs crème / terracotta), icônes 192 et 512.
+Métadonnées PWA « Budget familial » (couleurs lichen / noyer), icônes 192 et 512.
 
 ## icones/
-Icônes de l'app (favicon, apple-touch-icon 180, 192, 512) : € crème sur terracotta.
+Icônes de l'app (favicon, apple-touch-icon 180, 192, 512) : € chêne sur noyer veiné.
 
 ## package.json
 Script `npm test` uniquement (aucune dépendance).

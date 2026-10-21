@@ -10,8 +10,9 @@ import {ouvrirConfirmation} from './recurrentes.js';
 import {copier} from './connexion.js';
 import {seDeconnecter} from '../app.js';
 
-const COULEURS = ['#B5552F', '#2563A8', '#D49A2A', '#7A3A8E', '#5E8C31'];
-const GRIS_AUTRES = '#A89C90';
+// Teintes de bois et de forêt : noyer, ardoise, miel, prune, mousse
+const COULEURS = ['#6B4A35', '#4E6E85', '#C4923A', '#7D4E6B', '#5E7F4E'];
+const GRIS_AUTRES = '#B3AA9C';
 const SVG = 'http://www.w3.org/2000/svg';
 
 const pct = (x, total) => (total > 0 ? (x / total) * 100 : 0);

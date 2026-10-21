@@ -296,7 +296,8 @@ function rendreRevue(conteneur) {
 
   brancherSwipe(carte, decider);
 
-  conteneur.append(
+  // ajouter() ignore les éléments absents (append écrirait « null »)
+  ajouter(conteneur, [
     el('div', {class: 'entete-vue'},
       el('h1', {}, 'Revue des charges'),
       el('span', {class: 'pastille', 'aria-live': 'polite'}, `${revue.index + 1} / ${revue.lignes.length}`)),
@@ -314,7 +315,7 @@ function rendreRevue(conteneur) {
     el('div', {class: 'rangee', style: {marginTop: '8px'}},
       el('button', {class: 'btn-texte', type: 'button', disabled: !revue.historique.length, onclick: annuler,
         'aria-label': 'Annuler le dernier choix'}, '↩ Annuler'),
-      el('button', {class: 'btn-texte', type: 'button', onclick: () => terminerRevue(conteneur)}, 'Terminer')));
+      el('button', {class: 'btn-texte', type: 'button', onclick: () => terminerRevue(conteneur)}, 'Terminer'))]);
 }
 
 // Glisser au doigt (ou à la souris) : au-delà de 100 px, la décision est prise
