@@ -19,11 +19,16 @@ export function parseMontant(saisie, {negatif = false} = {}) {
 }
 
 const formateur = new Intl.NumberFormat('fr-FR', {style: 'currency', currency: 'EUR'});
+const formateurEntier = new Intl.NumberFormat('fr-FR', {style: 'currency', currency: 'EUR', maximumFractionDigits: 0});
 
-export function formatEUR(n, {signe = false} = {}) {
-  const texte = formateur.format(n).replace(/[  ]/g, ' ');
+// entier : arrondi à l'euro (textes des rapports : « Courses +120 € »)
+export function formatEUR(n, {signe = false, entier = false} = {}) {
+  const texte = (entier ? formateurEntier : formateur).format(n).replace(/[  ]/g, ' ');
   return signe && n > 0 ? '+' + texte : texte;
 }
+
+// « de Dylan », « d'Amel »
+export const de = (prenom) => (/^[aeiouyàâéèêëîïôöûüh]/i.test(prenom) ? `d'${prenom}` : `de ${prenom}`);
 
 // ── Mois (clés 'YYYY-MM') ───────────────────────────────────────────────
 
@@ -185,4 +190,140 @@ export function suiviObjectif({cible, debut, fin}, versements, moisCourant) {
   const effortRecalcule = moisRestants ? arrondi(Math.max(0, cible - verse) / moisRestants) : 0;
 
   return {verse, pct: arrondi((verse / cible) * 100), prevu, statut, moisRestants, effortRecalcule, echu};
+}
+
+// ── Rapports ────────────────────────────────────────────────────────────
+// Chiffres des rapports sur plusieurs mois. Ils reprennent syntheseMois et suiviObjectif
+// pour ne jamais contredire les onglets Budget et Objectifs.
+
+const sommeMontants = (liste) => somme(liste.map((x) => x.montant));
+const moyenneDe = (valeurs) => {
+  const connues = valeurs.filter((v) => v != null);
+  return connues.length ? arrondi(connues.reduce((t, v) => t + v, 0) / connues.length) : null;
+};
+// Hausse notable : plus de 15 % au-dessus de la moyenne et plus de 20 € d'écart
+const hausse = (v, moyenne) => v != null && moyenne != null && v > moyenne * 1.15 && v - moyenne > 20;
+const serie = (valeurs) => {
+  const moyenne = moyenneDe(valeurs);
+  return {valeurs, moyenne, hausses: valeurs.map((v) => hausse(v, moyenne))};
+};
+
+// moisDonnees : [{cle, ouvert, depenses, recurrentes}] dans l'ordre de la période ; un mois non ouvert vaut null.
+// Lignes : catégories actives et inactives ayant des dépenses sur la période, par ordre ; plus les charges fixes.
+export function evolutionCategories(moisDonnees, categories) {
+  const avecDepenses = new Set(moisDonnees.filter((m) => m.ouvert).flatMap((m) => m.depenses.map((d) => d.categorie_id)));
+  const lignes = categories
+    .filter((c) => c.active || avecDepenses.has(c.id))
+    .sort((a, b) => a.ordre - b.ordre)
+    .map((c) => ({categorie: c, ...serie(moisDonnees.map((m) =>
+      (m.ouvert ? sommeMontants(m.depenses.filter((d) => d.categorie_id === c.id)) : null)))}));
+  const chargesFixes = serie(moisDonnees.map((m) => (m.ouvert ? sommeMontants(m.recurrentes) : null)));
+  return {lignes, chargesFixes};
+}
+
+// Entrées et sorties réelles du foyer pour un mois ouvert (une charge à confirmer compte pour son montant recopié)
+export function entreesSorties({membresMois = [], revenus = [], recurrentes = [], depenses = []}) {
+  const s = syntheseMois({membres: membresMois, revenus, recurrentes});
+  const totalDepenses = sommeMontants(depenses);
+  return {
+    entrees: arrondi(s.salaires + s.autresRevenus),
+    sorties: arrondi(s.chargesFixes + totalDepenses),
+    salaires: s.salaires,
+    revenus: s.autresRevenus,
+    charges: s.chargesFixes,
+    depenses: totalDepenses,
+    estime: recurrentes.some((r) => r.a_confirmer),
+  };
+}
+
+// Versé par mois (retraits inclus) et « prévu au départ » : effort initial des objectifs non archivés actifs ce mois-là
+export function epargneParMois(versements, objectifs, cles) {
+  const mois = cles.map((cle) => {
+    const duMois = versements.filter((v) => v.mois_cle === cle);
+    const parObjectif = {};
+    for (const v of duMois) parObjectif[v.objectif_id] = arrondi((parObjectif[v.objectif_id] ?? 0) + Number(v.montant));
+    const prevu = somme(objectifs
+      .filter((o) => !o.archive && o.debut <= cle && cle <= o.fin)
+      .map((o) => effortMensuel(Number(o.cible), o.debut, o.fin)));
+    return {cle, verse: sommeMontants(duMois), parObjectif, prevu};
+  });
+  return {mois, totalVerse: somme(mois.map((m) => m.verse)), totalPrevu: somme(mois.map((m) => m.prevu))};
+}
+
+// cles : mois ouverts, croissants. baisse : % inférieur au mois ouvert précédent, les deux pendant l'objectif.
+export function progressionObjectif(objectif, versements, cles) {
+  const cible = Number(objectif.cible);
+  const pendant = (cle) => objectif.debut <= cle && cle <= objectif.fin;
+  const lignes = cles.map((cle) => {
+    const verse = sommeMontants(versements.filter((v) => v.objectif_id === objectif.id && v.mois_cle === cle));
+    return {cle, verse, pct: arrondi((verse / cible) * 100), baisse: false};
+  });
+  lignes.forEach((l, i) => {
+    const avant = lignes[i - 1];
+    l.baisse = Boolean(avant) && pendant(l.cle) && pendant(avant.cle) && l.pct < avant.pct;
+  });
+  return lignes;
+}
+
+const SEUIL_RAISON = 20;
+
+// Ce qui a pesé sur le mois par rapport au précédent : jusqu'à 3 écarts défavorables d'au moins 20 €, du plus gros au plus petit.
+// Une charge encore à confirmer n'est jamais citée (son montant n'est qu'une estimation).
+export function raisonsBaisse(courant, precedent, categories, membres) {
+  const ecarts = [];
+  const plus = (nom, ecart) => ecarts.push({texte: `${nom} ${formatEUR(ecart, {entier: true, signe: true})}`, ecart});
+  const moins = (nom, ecart) => ecarts.push({texte: `${nom} −${formatEUR(ecart, {entier: true})}`, ecart});
+  const totaux = (lignes, cle) => {
+    const t = new Map();
+    for (const l of lignes) t.set(cle(l), arrondi((t.get(cle(l)) ?? 0) + Number(l.montant)));
+    return t;
+  };
+
+  const depAvant = totaux(precedent.depenses, (d) => d.categorie_id);
+  for (const [id, montant] of totaux(courant.depenses, (d) => d.categorie_id)) {
+    const nom = categories.find((c) => c.id === id)?.nom;
+    if (nom) plus(nom, arrondi(montant - (depAvant.get(id) ?? 0)));
+  }
+
+  const cleCharge = (r) => r.recurrente_id ?? `libelle:${r.libelle}`;
+  const chargesAvant = totaux(precedent.recurrentes, cleCharge);
+  for (const r of courant.recurrentes.filter((x) => !x.a_confirmer)) {
+    plus(r.libelle, arrondi(Number(r.montant) - (chargesAvant.get(cleCharge(r)) ?? 0)));
+  }
+
+  const revenusApres = totaux(courant.revenus, (r) => r.libelle);
+  for (const [libelle, montant] of totaux(precedent.revenus, (r) => r.libelle)) {
+    if (!revenusApres.has(libelle) || revenusApres.get(libelle) === 0) ecarts.push({texte: `pas de ${libelle}`, ecart: montant});
+    else moins(libelle, arrondi(montant - revenusApres.get(libelle)));
+  }
+
+  for (const m of membres) {
+    const avant = precedent.membresMois.find((x) => x.membre_id === m.id);
+    const apres = courant.membresMois.find((x) => x.membre_id === m.id);
+    if (avant && apres) moins(`salaire ${de(m.prenom)}`, arrondi(Number(avant.salaire) - Number(apres.salaire)));
+  }
+
+  return ecarts.filter((e) => e.ecart >= SEUIL_RAISON).sort((a, b) => b.ecart - a.ecart).slice(0, 3).map((e) => e.texte);
+}
+
+// Projection au rythme des 3 derniers mois terminés (avant moisCourant, pas avant le début ; un mois sans versement vaut 0).
+// statut : 'atteint', 'projete', 'non_atteint' (rythme ≤ 0) ou 'sans' (aucun mois terminé depuis le début).
+export function projectionObjectif(objectif, versements, moisCourant) {
+  const cible = Number(objectif.cible);
+  const siens = versements.filter((v) => v.objectif_id === objectif.id);
+  const s = suiviObjectif({...objectif, cible}, siens, moisCourant);
+  const base = {rythme: null, moisAtteinte: null, enAvance: false, effortNecessaire: s.effortRecalcule, echu: s.echu};
+  if (s.statut === 'atteint') return {...base, statut: 'atteint'};
+
+  const termines = [1, 2, 3].map((n) => decalerMois(moisCourant, -n)).filter((cle) => cle >= objectif.debut);
+  if (!termines.length) return {...base, statut: 'sans'};
+  const rythmeExact = sommeMontants(siens.filter((v) => termines.includes(v.mois_cle))) / termines.length;
+  const rythme = arrondi(rythmeExact);
+  if (rythme <= 0) return {...base, rythme, statut: 'non_atteint'};
+
+  // Comme suiviObjectif : si l'on a déjà versé ce mois-ci, la suite commence le mois prochain
+  const depart = siens.some((v) => v.mois_cle === moisCourant) ? decalerMois(moisCourant, 1) : moisCourant;
+  const moisNecessaires = Math.ceil(arrondi((cible - s.verse) / rythmeExact));
+  const moisAtteinte = decalerMois(depart, moisNecessaires - 1);
+  return {...base, statut: 'projete', rythme, moisAtteinte, enAvance: moisAtteinte < objectif.fin};
 }
