@@ -27,7 +27,7 @@ export function rendreConnexion(conteneur, {apres}) {
     } finally {
       oubli.disabled = false;
     }
-  }}, 'Mot de passe oublié ?');
+  }}, 'Mot de passe oublié ?');
   const btnConnexion = el('button', {type: 'button', onclick: () => changerMode('connexion')}, 'Se connecter');
   const btnInscription = el('button', {type: 'button', onclick: () => changerMode('inscription')}, 'Créer un compte');
 

@@ -3,7 +3,7 @@ import {ajouterRevenu, modifierRevenu, supprimerRevenu, creerCategorie, modifier
   modifierProfil} from '../db.js';
 import {etat, recharger} from '../etat.js';
 import {formatEUR} from '../calc.js';
-import {el, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
+import {el, ouvrirFeuille, toast, champMontant, caseACocher, choixOuiNon} from '../ui.js';
 
 const ICONES_CATEGORIE = ['🛒', '⛽', '🎉', '👕', '⚽', '💊', '🔧', '🏖️', '🎁', '📦', '🍔', '🐾', '📚', '💇', '🚌', '🏠'];
 
@@ -76,7 +76,7 @@ function editerRevenu(revenu) {
   el('p', {class: 'attenue', style: {margin: 0}}, 'Coché, le revenu est déjà compris dans un solde : il ne s\'y ajoute pas.'),
   message, bouton,
   revenu ? el('button', {class: 'btn-danger', type: 'button', onclick: (e) => {
-    if (!confirm(`Supprimer « ${revenu.libelle} » ?`)) return;
+    if (!confirm(`Supprimer « ${revenu.libelle} » ?`)) return;
     executer({bouton: e.currentTarget, message, feuille, succes: 'Revenu supprimé', action: () => supprimerRevenu(revenu.id)});
   }}, 'Supprimer') : null);
   feuille = ouvrirFeuille(form, {titre: revenu ? 'Modifier le revenu' : 'Nouveau revenu'});
@@ -153,6 +153,8 @@ export function ouvrirProfil() {
   const moi = etat.moi;
   const prenom = el('input', {class: 'champ', id: 'profil-prenom', value: moi.prenom, autocomplete: 'given-name'});
   const salaire = champMontant({id: 'profil-salaire', etiquette: 'Salaire habituel', valeur: moi.salaire_defaut});
+  const paie = choixOuiNon({etiquette: 'Ton salaire du mois arrive', valeur: Boolean(moi.paie_mois_precedent),
+    oui: 'Fin du mois d\'avant', non: 'Pendant le mois'});
   const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
   const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, 'Enregistrer');
   let feuille;
@@ -162,11 +164,15 @@ export function ouvrirProfil() {
     if (!prenom.value.trim()) { message.textContent = 'Indique ton prénom'; return; }
     if (!s.ok) return;
     executer({bouton, message, feuille, succes: 'Profil enregistré',
-      action: () => modifierProfil(moi.id, {prenom: prenom.value.trim(), salaire_defaut: s.valeur})});
+      action: () => modifierProfil(moi.id, {prenom: prenom.value.trim(), salaire_defaut: s.valeur,
+        paie_mois_precedent: paie.lire()})});
   }},
   el('div', {}, el('label', {class: 'etiquette', for: 'profil-prenom'}, 'Prénom'), prenom),
   salaire.element,
   el('p', {class: 'attenue', style: {margin: 0}}, 'Proposé à l\'ouverture d\'un mois quand aucun mois précédent ne sert de modèle.'),
+  paie.element,
+  el('p', {class: 'attenue', style: {margin: 0}},
+    'Fin du mois d\'avant : à l\'ouverture, « salaire déjà sur ton compte ? » est prérempli sur Oui (tu peux toujours changer).'),
   message, bouton);
   feuille = ouvrirFeuille(form, {titre: 'Mon profil'});
 }

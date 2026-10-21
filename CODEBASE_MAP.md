@@ -64,7 +64,7 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - ajouterDepense / modifierDepense / supprimerDepense — dépenses ponctuelles
 - modifierBudget(foyerId, moisId, categorieId, montant) — budget du mois et défaut
 - creerCategorie / modifierCategorie / activerCategorie — catégories (jamais supprimées)
-- modifierProfil(membreId, {prenom, salaire_defaut}) — profil du membre
+- modifierProfil(membreId, {prenom, salaire_defaut, paie_mois_precedent}) — profil du membre
 - modifierMoisMembre(foyerId, moisId, membreId, champs) — part du mois d'un membre (upsert partiel)
 - creerObjectif / modifierObjectif / archiverObjectif — objectifs d'épargne
 - ajouterVersement / supprimerVersement — versements (retrait = négatif)
@@ -101,7 +101,7 @@ Connexion / inscription, création ou adhésion au foyer.
 - copier(texte) — copie dans le presse-papiers
 
 ## js/vues/ouverture.js
-Ouverture du mois : sa propre part (salaire, solde), revenus déjà reçus, versements (les charges passent ensuite en revue).
+Ouverture du mois : sa part (salaire, solde), celle de l'autre en option, revenus déjà reçus, versements (puis revue des charges).
 - rendreOuverture(conteneur, {apres}) — formulaire d'ouverture du mois
 
 ## js/vues/recurrentes.js
@@ -127,11 +127,16 @@ Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, par 
 - editerMembre(membre, mm) — salaire, solde daté, déjà dans le solde
 - bilan() — bilan d'un mois passé (remplace la prévision)
 
+## js/vues/part-membre.js
+Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), partagée ouverture / Budget.
+- formulairePart({membre, cle, valeurs, premiereFois}) — questions, préremplissage si payé fin M-1
+- de(prenom) — « de Dylan » / « d'Amel »
+
 ## js/vues/reglages.js
 Feuilles ouvertes depuis l'onglet Budget.
 - ouvrirRevenus() — autres revenus du mois
 - ouvrirCategories() — créer, renommer, désactiver
-- ouvrirProfil() — prénom et salaire habituel
+- ouvrirProfil() — prénom, salaire habituel, salaire payé fin du mois d'avant
 
 ## js/vues/objectifs.js
 Onglet Objectifs : suivi, versements / retraits, archives.
@@ -161,6 +166,9 @@ Publie toutes les tables partagées du foyer dans Realtime.
 
 ## supabase/migrations/007_charges_variables_perso.sql
 `variable` et `membre_id` sur les récurrentes (modèle et mois), `a_confirmer` sur le mois ; `ouvrir_mois` les recopie.
+
+## supabase/migrations/008_paie_mois_precedent.sql
+`membres.paie_mois_precedent` : salaire du mois M versé fin M-1 (réponse d'ouverture préremplie).
 
 ## supabase/tests/rls_et_rpc.sql
 Test SQL (begin … rollback) : RLS, RPC, mois sautés, contraintes.

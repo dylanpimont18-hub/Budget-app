@@ -207,7 +207,7 @@ function ouvrirDetail(o) {
           el('span', {class: `ligne-montant montant ${v.montant < 0 ? 'niveau-texte-depasse' : ''}`},
             formatEUR(Number(v.montant), {signe: true})),
           el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Supprimer ce versement', onclick: (e) => {
-            if (!confirm('Supprimer ce versement ?')) return;
+            if (!confirm('Supprimer ce versement ?')) return;
             action(e.currentTarget, () => supprimerVersement(v.id), 'Versement supprimé');
           }}, '✕'))))
       : el('p', {class: 'attenue'}, 'Aucun versement pour l\'instant.'),

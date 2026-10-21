@@ -1,10 +1,11 @@
-// Ouverture du mois : sa propre part (salaire, solde), autres revenus, versements vers les objectifs.
+// Ouverture du mois : sa propre part (salaire, solde), celle de l'autre si on la connaît, autres revenus, versements.
 // Les charges (déjà prélevées ? montant variable ?) se passent ensuite en revue dans l'onglet Récurrentes.
 // Le solde est le point de départ du calcul : on note ce qui y est déjà compris pour ne rien compter deux fois.
 import {ouvrirMois, chargerMois} from '../db.js';
 import {etat, recharger} from '../etat.js';
 import {libelleMois, suiviObjectif} from '../calc.js';
-import {el, champMontant, choixOuiNon, caseACocher, toast} from '../ui.js';
+import {el, champMontant, caseACocher, toast} from '../ui.js';
+import {formulairePart, de} from './part-membre.js';
 import {estArchive} from './objectifs.js';
 
 const REVENUS_PAR_DEFAUT = ['Allocations familiales (CAF)', 'Autres revenus (primes…)'];
@@ -38,21 +39,14 @@ export async function rendreOuverture(conteneur, {apres}) {
     return c;
   };
 
-  // Ma part : les autres membres rempliront la leur depuis l'onglet Budget
+  // Ma part, obligatoire ; celle des autres, facultative (sinon ils la rempliront depuis l'onglet Budget)
   const moi = etat.moi;
-  const avant = precedent?.membresMois.find((x) => x.membre_id === moi.id);
-  const salaire = nouveauChamp({id: 'salaire', etiquette: 'Salaire', valeur: avant?.salaire ?? moi.salaire_defaut});
-  const aideSalaire = el('p', {class: 'attenue', style: {margin: 0}});
-  const blocSalaire = el('div', {class: 'formulaire', hidden: true}, salaire.element, aideSalaire);
-  const recu = choixOuiNon({etiquette: 'Ton salaire est déjà arrivé ?', non: 'Pas encore', surChange: (oui) => {
-    salaire.element.querySelector('label').textContent = oui ? 'Salaire reçu' : 'Salaire attendu';
-    aideSalaire.textContent = oui ? 'Il est déjà compris dans ton solde ci-dessous.' : 'Il sera ajouté à ton solde dans le calcul.';
-    blocSalaire.hidden = false;
-    erreurRecu.textContent = '';
-  }});
-  const erreurRecu = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
-  const solde = nouveauChamp({id: 'solde', etiquette: 'Solde actuel de ton compte', negatif: true, vide: 'null'});
-  const autres = etat.membres.filter((m) => m.id !== moi.id).map((m) => m.prenom);
+  const valeursAvant = (m) => ({salaire: precedent?.membresMois.find((x) => x.membre_id === m.id)?.salaire});
+  const maPart = formulairePart({membre: etat.membres.find((m) => m.id === moi.id) ?? moi, cle, valeurs: valeursAvant(moi)});
+  const autresParts = etat.membres.filter((m) => m.id !== moi.id).map((m) => ({
+    membre: m,
+    part: formulairePart({membre: m, cle, valeurs: valeursAvant(m)}),
+  }));
 
   // Autres revenus
   const lignesRevenus = [];
@@ -113,20 +107,26 @@ export async function rendreOuverture(conteneur, {apres}) {
     e.preventDefault();
     message.textContent = '';
     const resultats = champs.map((c) => c.valider());
-    if (recu.lire() == null) {
-      erreurRecu.textContent = 'Réponds d\'abord à cette question';
-      recu.element.scrollIntoView({behavior: 'smooth', block: 'center'});
-      return;
+    const mienne = maPart.valider();
+    if (!mienne.ok) return;
+    // La part d'un autre n'est envoyée que si l'on a répondu à sa question
+    const parts = [mienne.valeurs];
+    for (const {part, details} of autresParts) {
+      if (!part.repondu() && !part.soldeSaisi()) continue;
+      details.open = true;
+      const r = part.valider();
+      if (!r.ok) return;
+      parts.push(r.valeurs);
     }
     if (resultats.some((r) => !r.ok)) {
       message.textContent = 'Corrige les champs en rouge';
       return;
     }
-    const avecSolde = solde.lire().valeur != null;
+    const avecSolde = parts.some((p) => p.solde != null);
     btnValider.disabled = true;
     try {
       const resultat = await ouvrirMois(cle,
-        [{membre_id: moi.id, salaire: salaire.lire().valeur, solde: solde.lire().valeur, salaire_dans_solde: recu.lire()}],
+        parts,
         lignesRevenus.map((l) => l.lire()).filter((r) => r.libelle && r.montant > 0)
           .map((r) => ({...r, dans_solde: avecSolde && r.dans_solde})),
         lignesObjectifs.map((l) => l.lire()).filter((v) => v.montant),
@@ -146,10 +146,15 @@ export async function rendreOuverture(conteneur, {apres}) {
     el('form', {class: 'formulaire', onsubmit: valider, novalidate: true},
       el('div', {class: 'carte formulaire'},
         el('h2', {}, `Ta part · ${moi.prenom}`),
-        el('div', {}, recu.element, erreurRecu), blocSalaire, solde.element,
-        autres.length
-          ? el('p', {class: 'attenue', style: {margin: 0}}, `${autres.join(' et ')} remplira sa part depuis l'onglet Budget.`)
-          : null),
+        maPart.element),
+      autresParts.map((a) => {
+        a.details = el('details', {class: 'carte repliable'},
+          el('summary', {}, `Remplir aussi la part ${de(a.membre.prenom)}`),
+          el('p', {class: 'attenue', style: {margin: '0 0 12px'}},
+            `Facultatif : sinon ${a.membre.prenom} la remplira depuis l'onglet Budget.`),
+          a.part.element);
+        return a.details;
+      }),
       el('div', {class: 'carte formulaire'},
         el('h2', {}, 'Autres revenus du foyer'),
         listeRevenus,

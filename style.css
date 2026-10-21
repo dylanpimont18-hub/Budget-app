@@ -708,3 +708,7 @@ details.repliable > summary {
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+.bandeau-info > .btn-secondaire { width: auto; flex: 0 0 auto; padding: 0 16px; }
+.bandeau-info.discret { background: var(--blanc); color: var(--txt); box-shadow: inset 4px 0 0 var(--filet); border: 1px solid var(--filet); font-weight: 500; }
+details.carte > summary { min-height: 44px; }
+details.carte[open] > summary { margin-bottom: 4px; }
