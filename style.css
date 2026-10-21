@@ -797,3 +797,89 @@ details.carte[open] > summary { margin-bottom: 4px; }
 
     button.ligne:hover, button.carte:hover { background: var(--sable); }
 }
+
+/* ── Rapports (ordinateur) ───────────────────────────────────────────── */
+
+.entete-rapport {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.entete-rapport h1 { margin: 0; }
+.entete-rapport h1::first-letter { text-transform: uppercase; }
+.date-impression { display: none; margin: 4px 0 0; }
+.outils-rapport { display: flex; align-items: flex-start; gap: 12px; }
+.outils-rapport > .btn-secondaire { width: auto; }
+.selecteur-periode { display: flex; flex-direction: column; gap: 8px; min-width: 420px; }
+.selecteur-periode .segment > button { padding: 0 12px; }
+.choix-mois { display: block; }
+
+.section-rapport { padding: 20px 24px; margin-bottom: 20px; }
+.section-rapport > h2 { margin-bottom: 4px; }
+.section-rapport > .attenue { margin: 0 0 12px; }
+.resume-rapport { margin: 0 0 4px; }
+.titre-graphique { margin: 20px 0 4px; }
+
+.defilement-x { overflow-x: auto; }
+.tableau-rapport {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin-top: 8px;
+}
+.tableau-rapport th, .tableau-rapport td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--filet);
+    text-align: left;
+    vertical-align: top;
+}
+.tableau-rapport thead th { color: var(--attenue); font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.tableau-rapport tbody th { font-weight: 500; white-space: nowrap; }
+.tableau-rapport .montant { text-align: right; }
+.tableau-rapport td.hausse { background: var(--orange-f); color: var(--orange-t); font-weight: 600; }
+.tableau-rapport td.baisse { color: var(--orange-t); font-weight: 600; }
+.tableau-rapport td.moyenne { color: var(--attenue); }
+.tableau-rapport tr.inactive th { color: var(--attenue); font-style: italic; }
+.tableau-rapport tr.ligne-total th, .tableau-rapport tr.ligne-total td { font-weight: 600; border-top: 1.5px solid var(--noyer); }
+.tableau-rapport tr.ligne-prevu th, .tableau-rapport tr.ligne-prevu td { color: var(--attenue); }
+.tableau-rapport tr.ligne-choix { cursor: pointer; }
+.tableau-rapport tr.ligne-choix:hover { background: var(--fond); }
+.tableau-rapport tr.ligne-choix.choisie { background: var(--sable); }
+.tableau-rapport tr.ligne-choix.choisie th { font-weight: 700; }
+.tableau-rapport td.pourquoi { min-width: 220px; color: var(--txt); }
+.tableau-objectif td.pourquoi { width: 40%; }
+.tableau-rapport .raison { white-space: nowrap; }
+.non-ouvert { color: var(--attenue); font-style: italic; font-size: 0.8rem; }
+.estime { color: var(--orange-t); font-size: 0.75rem; font-weight: 600; }
+
+.graphique-barres { max-width: 760px; color: var(--txt); }
+.graphique-barres svg { display: block; width: 100%; height: auto; }
+.legende-ligne { display: flex; gap: 16px; margin: 4px 0 8px; }
+
+.bloc-objectif .objectif-entete { margin-bottom: 4px; }
+.bloc-objectif .objectif-entete h2 { font-size: 1.3rem; }
+.projection { margin-top: 12px; padding: 10px 14px; border-radius: var(--rayon-petit); background: var(--sable); }
+.projection p { margin: 2px 0; }
+.archives-rapport { margin-top: 8px; }
+
+/* ── Impression (rapport) ────────────────────────────────────────────── */
+
+@media print {
+    @page { margin: 14mm; }
+    body { background: #fff; color: var(--noyer); padding: 0; }
+    .onglets, .btn-ajout-rapide, .bandeau-hors-ligne, .bandeau-info, .toast, #feuilles,
+    .outils-rapport, .ecran-seulement, .vue button, .vue select { display: none !important; }
+    .vue { max-width: none; padding: 0; }
+    .date-impression { display: block; }
+    .carte, .section-rapport { background: #fff; break-inside: avoid; }
+    .carte-stat { break-inside: avoid; }
+    .tableau-rapport tr, .graphique-barres, .projection, .objectif-entete { break-inside: avoid; }
+    .section-rapport > h2, .titre-graphique { break-after: avoid; }
+    .defilement-x { overflow: visible; }
+    .tableau-rapport tr.ligne-choix.choisie { background: none; }
+    .jauge, .jauge > span, .tableau-rapport td.hausse, .projection, .puce { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    details.archives-rapport > summary { display: none; }
+}

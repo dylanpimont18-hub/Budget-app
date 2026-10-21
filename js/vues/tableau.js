@@ -12,8 +12,8 @@ import {copier} from './connexion.js';
 import {seDeconnecter} from '../app.js';
 
 // Teintes de bois et de forêt : noyer, ardoise, miel, prune, mousse
-const COULEURS = ['#6B4A35', '#4E6E85', '#C4923A', '#7D4E6B', '#5E7F4E'];
-const GRIS_AUTRES = '#B3AA9C';
+export const COULEURS = ['#6B4A35', '#4E6E85', '#C4923A', '#7D4E6B', '#5E7F4E'];
+export const GRIS_AUTRES = '#B3AA9C';
 const SVG = 'http://www.w3.org/2000/svg';
 
 const pct = (x, total) => (total > 0 ? (x / total) * 100 : 0);

@@ -161,6 +161,59 @@ export async function chargerMois(foyerId, cle) {
   return donnees;
 }
 
+// Toutes les lignes d'une requête, par pages de 1000 (limite de Supabase par réponse)
+async function toutesLesLignes(requete, message) {
+  const page = 1000;
+  const lignes = [];
+  for (let debut = 0; ; debut += page) {
+    const lot = verifier(await requete().range(debut, debut + page - 1), message);
+    lignes.push(...lot);
+    if (lot.length < page) return lignes;
+  }
+}
+
+// Rapports : mois ouverts de debut à fin, plus le dernier mois ouvert avant debut (référence du « pourquoi »).
+// Une requête par table pour toute la plage. Renvoie {parMois: {cle: {cle, mois, membresMois, revenus,
+// recurrentes, depenses, versements}}, reference: cle | null} ; seuls les mois ouverts y figurent.
+export async function chargerPlage(foyerId, debut, fin) {
+  const tous = verifier(await sb.from('mois').select('id, cle').eq('foyer_id', foyerId).lte('cle', fin)
+    .order('cle', {ascending: false}), 'Impossible de charger les mois du rapport.');
+  const reference = tous.find((m) => m.cle < debut) ?? null;
+  const retenus = tous.filter((m) => m.cle >= debut || m === reference);
+  if (!retenus.length) return {parMois: {}, reference: null};
+
+  const ids = retenus.map((m) => m.id);
+  const premier = retenus.at(-1).cle;
+  const message = 'Impossible de charger les données du rapport.';
+  const [membresMois, revenus, recurrentes, depenses, versements] = await Promise.all([
+    toutesLesLignes(() => sb.from('mois_membres').select('mois_id, membre_id, salaire').in('mois_id', ids)
+      .order('mois_id').order('membre_id'), message),
+    toutesLesLignes(() => sb.from('revenus_mois').select('id, mois_id, libelle, montant').in('mois_id', ids).order('id'), message),
+    toutesLesLignes(() => sb.from('recurrentes_mois')
+      .select('id, mois_id, recurrente_id, libelle, icone, montant, variable, a_confirmer, membre_id').in('mois_id', ids)
+      .order('id'), message),
+    toutesLesLignes(() => sb.from('depenses').select('id, date, montant, categorie_id, membre_id')
+      .eq('foyer_id', foyerId).gte('date', `${premier}-01`).lt('date', `${decalerMois(fin, 1)}-01`).order('id'), message),
+    toutesLesLignes(() => sb.from('versements').select('id, objectif_id, mois_cle, montant')
+      .eq('foyer_id', foyerId).gte('mois_cle', premier).lte('mois_cle', fin).order('id'), message),
+  ]);
+
+  const parMois = {};
+  const cleDe = new Map(retenus.map((m) => [m.id, m.cle]));
+  for (const m of retenus) {
+    parMois[m.cle] = {cle: m.cle, mois: m, membresMois: [], revenus: [], recurrentes: [], depenses: [], versements: []};
+  }
+  const ranger = (lignes, champ, cle) => {
+    for (const l of lignes) parMois[cle(l)]?.[champ].push(l);
+  };
+  ranger(membresMois, 'membresMois', (l) => cleDe.get(l.mois_id));
+  ranger(revenus, 'revenus', (l) => cleDe.get(l.mois_id));
+  ranger(recurrentes, 'recurrentes', (l) => cleDe.get(l.mois_id));
+  ranger(depenses, 'depenses', (l) => l.date.slice(0, 7));     // dépenses d'un mois non ouvert : ignorées
+  ranger(versements, 'versements', (l) => l.mois_cle);
+  return {parMois, reference: reference?.cle ?? null};
+}
+
 // Clés des mois ouverts, du plus récent au plus ancien
 export async function listerMois(foyerId) {
   const lignes = verifier(await sb.from('mois').select('cle').eq('foyer_id', foyerId).order('cle', {ascending: false}),
