@@ -7,7 +7,7 @@ Tests : `npm test` (logique pure) et `supabase/tests/rls_et_rpc.sql` (base, à l
 Guide pour Claude Code : architecture, commandes, conventions.
 
 ## index.html
-Coquille : `#vue`, barre d'onglets `#onglets` (titre et entrée Rapports visibles sur ordinateur seulement), bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
+Coquille : bandeau `#mise-a-jour`, `#vue`, barre d'onglets `#onglets` (titre et entrée Rapports visibles sur ordinateur seulement), bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
 
 ## style.css
 Jetons « atelier d'ébéniste » (`:root` : lichen, noyer, chêne, mousse, miel, cèdre) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques, bandeaux.
@@ -21,6 +21,17 @@ Icônes de l'app (favicon, apple-touch-icon 180, 192, 512) : € chêne sur noye
 
 ## package.json
 Script `npm test` uniquement (aucune dépendance).
+
+## .github/workflows/pages.yml
+Publication GitHub Pages à chaque push sur main : tests, copie du site, version = commit dans `js/version.js` et `version.json` (avec la liste des fichiers).
+
+## js/version.js
+Version qui tourne (`__VERSION__` en local, numéro de commit une fois publiée).
+
+## js/mise-a-jour.js
+Bandeau « Nouvelle version disponible » : re-télécharge chaque fichier puis recharge ; signale si l'ancien code tourne encore.
+- etatMiseAJour(locale, enLigne, tentative) — à jour / disponible / en attente
+- initMiseAJour(bandeau) — vérifie au démarrage, au retour, toutes les 5 min
 
 ## js/config.js
 URL et clé publique (anon) du projet Supabase.
@@ -203,3 +214,9 @@ Test SQL (begin … rollback) : RLS, RPC, mois sautés, contraintes.
 
 ## tests/calc.test.js
 Tests `node:test` de `js/calc.js`.
+
+## tests/rapport.test.js
+Tests de `js/rapport.js` (assemblage, Markdown, JSON).
+
+## tests/mise-a-jour.test.js
+Tests de `etatMiseAJour`.

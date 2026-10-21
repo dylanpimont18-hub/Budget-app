@@ -10,6 +10,7 @@ import {ouvrirRevenus, ouvrirCategories, ouvrirProfil} from './reglages.js';
 import {ouvrirConfirmation} from './recurrentes.js';
 import {copier} from './connexion.js';
 import {seDeconnecter} from '../app.js';
+import {VERSION} from '../version.js';
 
 // Teintes de bois et de forêt : noyer, ardoise, miel, prune, mousse
 export const COULEURS = ['#6B4A35', '#4E6E85', '#C4923A', '#7D4E6B', '#5E7F4E'];
@@ -420,5 +421,6 @@ function piedDePage() {
       el('button', {class: 'btn-texte', type: 'button', onclick: () => copier(code)}, 'Copier')),
     el('div', {style: {display: 'flex', justifyContent: 'space-between', gap: '8px'}},
       el('button', {class: 'btn-texte', type: 'button', onclick: ouvrirProfil, style: {paddingLeft: 0}}, 'Mon profil'),
-      el('button', {class: 'btn-texte', type: 'button', onclick: seDeconnecter}, 'Se déconnecter')));
+      el('button', {class: 'btn-texte', type: 'button', onclick: seDeconnecter}, 'Se déconnecter')),
+    el('p', {class: 'version-app'}, `Version ${VERSION === '__VERSION__' ? 'locale' : VERSION}`));
 }
