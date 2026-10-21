@@ -36,7 +36,16 @@ export function ajouter(parent, enfants) {
   }
 }
 
-// Feuille modale qui monte du bas ; fermeture par ✕, clic sur le fond ou Échap.
+// Disposition ordinateur (même seuil que la media query de style.css)
+const requeteOrdinateur = globalThis.matchMedia?.('(min-width: 1024px)');
+
+export const estOrdinateur = () => Boolean(requeteOrdinateur?.matches);
+
+export function surChangementOrdinateur(cb) {
+  requeteOrdinateur?.addEventListener('change', (e) => cb(e.matches));
+}
+
+// Feuille modale qui monte du bas (fenêtre centrée sur ordinateur) ; fermeture par ✕, clic sur le fond ou Échap.
 export function ouvrirFeuille(contenu, {titre = '', surFermeture} = {}) {
   const conteneur = document.getElementById('feuilles');
   const precedent = document.activeElement;

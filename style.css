@@ -712,3 +712,88 @@ details.repliable > summary {
 .bandeau-info.discret { background: var(--blanc); color: var(--txt); box-shadow: inset 4px 0 0 var(--filet); border: 1px solid var(--filet); font-weight: 500; }
 details.carte > summary { min-height: 44px; }
 details.carte[open] > summary { margin-bottom: 4px; }
+
+/* ── Ordinateur (≥ 1024 px) ──────────────────────────────────────────── */
+/* Sous ce seuil rien ne change : le titre du menu et l'onglet Rapports n'existent pas sur téléphone. */
+
+.onglets-titre, .onglets > button[data-onglet="rapports"] { display: none; }
+
+@media (min-width: 1024px) {
+    :root { --largeur-menu: 232px; }
+
+    body {
+        padding-left: var(--largeur-menu);
+        padding-bottom: 32px;
+    }
+
+    .vue {
+        max-width: 1200px;
+        padding: 32px 40px;
+    }
+
+    /* La barre du bas devient un menu latéral fixe */
+    .onglets {
+        top: 0;
+        right: auto;
+        width: var(--largeur-menu);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 28px 14px;
+    }
+    .onglets-titre {
+        display: block;
+        margin: 0 10px 24px;
+        font-family: var(--serif);
+        font-optical-sizing: auto;
+        font-weight: 600;
+        font-size: 1.35rem;
+        line-height: 1.2;
+        color: var(--chene-texte);
+    }
+    .onglets > button, .onglets > button[data-onglet="rapports"] {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 12px;
+        min-height: 48px;
+        padding: 0 14px;
+        border-radius: var(--rayon-petit);
+        font-size: 0.98rem;
+        text-align: left;
+    }
+    .onglets > button span { font-size: 1.15rem; }
+    .onglets > button:hover { background: rgba(255, 236, 205, 0.06); color: var(--chene-texte); }
+    .onglets > button[aria-current="page"] { background: var(--noyer-clair); }
+    .onglets > button[aria-current="page"]::before {
+        top: 12px;
+        bottom: 12px;
+        left: 0;
+        right: auto;
+        width: 3px;
+        height: auto;
+        border-radius: 0 3px 3px 0;
+    }
+
+    .btn-ajout-rapide { right: 32px; bottom: 32px; }
+    body[data-onglet="depenses"] .btn-ajout-rapide { display: none; }
+
+    .toast {
+        left: calc(50% + var(--largeur-menu) / 2);
+        bottom: 32px;
+    }
+
+    /* Les feuilles du bas deviennent des fenêtres centrées */
+    .fond-feuille { align-items: center; padding: 24px; }
+    .feuille {
+        max-width: 520px;
+        max-height: 88dvh;
+        border-radius: 22px;
+        padding: 4px 20px 20px;
+        box-shadow: 0 24px 60px rgba(51, 37, 29, 0.3);
+        transform: translateY(16px);
+    }
+    .fond-feuille.ouverte .feuille { transform: none; }
+
+    button.ligne:hover, button.carte:hover { background: var(--sable); }
+}
