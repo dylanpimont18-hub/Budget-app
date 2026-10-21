@@ -49,8 +49,12 @@ export function rendreRapports(conteneur) {
   dessiner(conteneur);
 }
 
+// Les données sont oubliées en sortant : à la réouverture (ou pour un autre compte après déconnexion),
+// rien de périmé n'est affiché
 export function quitterRapports() {
   actif = false;
+  charge = null;
+  erreur = null;
   generation += 1;   // un chargement en cours sera ignoré
   clearTimeout(minuteur);
   desabonner?.();
@@ -284,7 +288,7 @@ function blocObjectif(o, cles, ouverts) {
   // Le premier mois de la période se compare au mois ouvert qui le précède (chargé en plus, hors affichage)
   const clesProgression = charge.reference ? [charge.reference, ...ouverts] : ouverts;
   const versementsPlage = clesProgression.flatMap((c) => charge.parMois[c].versements);
-  const progression = progressionObjectif(o, versementsPlage, clesProgression);
+  const progression = progressionObjectif(o, versementsPlage, clesProgression, etat.moisCourantCle);
 
   const ligneMois = (cle) => {
     const donnees = charge.parMois[cle];
@@ -305,8 +309,8 @@ function blocObjectif(o, cles, ouverts) {
       el('td', {class: 'montant'}, formatEUR(es.entrees)),
       el('td', {class: 'montant'}, formatEUR(es.sorties),
         es.estime ? el('span', {class: 'estime', title: 'Une charge variable est encore à confirmer'}, ' estimé') : null),
-      el('td', {class: 'pourquoi'}, raisons.length
-        ? raisons.map((r, j) => [j ? ' · ' : null, el('span', {class: 'raison'}, r)]) : '—'));
+      el('td', {class: 'pourquoi'}, p.enCours ? el('span', {class: 'non-ouvert'}, 'mois en cours')
+        : (raisons.length ? raisons.map((r, j) => [j ? ' · ' : null, el('span', {class: 'raison'}, r)]) : '—')));
   };
 
   return el('section', {class: 'carte section-rapport bloc-objectif'},
