@@ -8,6 +8,7 @@ import {rendreOuverture} from './vues/ouverture.js';
 import {rendreRecurrentes} from './vues/recurrentes.js';
 import {rendreDepenses} from './vues/depenses.js';
 import {initAjoutRapide} from './vues/ajout-rapide.js';
+import {initMiseAJour} from './mise-a-jour.js';
 import {rendreTableau} from './vues/tableau.js';
 import {rendreObjectifs} from './vues/objectifs.js';
 import {rendreRapports, quitterRapports} from './vues/rapports.js';
@@ -81,6 +82,7 @@ surChangementOrdinateur((ordinateur) => {
   else rendreOngletActif();
 });
 initAjoutRapide(btnAjout);
+initMiseAJour(document.getElementById('mise-a-jour'));
 
 // ── Hors ligne ─────────────────────────────────────────────────────────
 const bandeau = document.getElementById('hors-ligne');

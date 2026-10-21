@@ -1,0 +1,49 @@
+# Publie l'app sur GitHub Pages à chaque push sur main.
+# La version (numéro de commit) est inscrite dans js/version.js et version.json : l'app détecte ainsi
+# qu'une nouvelle version est en ligne et propose de se mettre à jour (js/mise-a-jour.js).
+name: Publication
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests
+        run: npm test
+
+      - name: Préparer le site avec sa version
+        run: |
+          VERSION="${GITHUB_SHA::7}"
+          mkdir _site
+          cp -r index.html style.css manifest.json icones js _site/
+          sed -i "s/__VERSION__/${VERSION}/" _site/js/version.js
+          grep -q "'${VERSION}'" _site/js/version.js
+          # Fichiers re-téléchargés par « Mettre à jour » (./ = la page d'accueil elle-même)
+          FICHIERS=$(cd _site && { echo ./; find . -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' -o -name '*.json' \) | sed 's#^\./##'; } | jq -R . | jq -s .)
+          jq -n --arg version "$VERSION" --argjson fichiers "$FICHIERS" '{version: $version, fichiers: $fichiers}' > _site/version.json
+          cat _site/version.json
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploiement
+        uses: actions/deploy-pages@v4
