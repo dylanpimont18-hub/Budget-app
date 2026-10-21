@@ -7,10 +7,11 @@ Tests : `npm test` (logique pure) et `supabase/tests/rls_et_rpc.sql` (base, à l
 Guide pour Claude Code : architecture, commandes, conventions.
 
 ## index.html
-Coquille : `#vue`, barre d'onglets `#onglets`, bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
+Coquille : `#vue`, barre d'onglets `#onglets` (titre et entrée Rapports visibles sur ordinateur seulement), bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
 
 ## style.css
 Jetons « atelier d'ébéniste » (`:root` : lichen, noyer, chêne, mousse, miel, cèdre) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques, bandeaux.
+Ordinateur (`min-width: 1024px`) : menu latéral, feuilles en fenêtres centrées, `.grille-ordinateur` (2 colonnes), Dépenses en tableau + panneau, rapports ; `@media print` pour le rapport.
 
 ## manifest.json
 Métadonnées PWA « Budget familial » (couleurs lichen / noyer), icônes 192 et 512.
@@ -27,7 +28,8 @@ URL et clé publique (anon) du projet Supabase.
 ## js/calc.js
 Fonctions pures de calcul, sans DOM ni réseau.
 - parseMontant(saisie, {negatif}) — lit un montant au clavier français
-- formatEUR(n, {signe}) — formate en euros fr-FR
+- formatEUR(n, {signe, entier}) — formate en euros fr-FR
+- de(prenom) — « de Dylan » / « d'Amel »
 - cleMois(date) — clé 'YYYY-MM' en heure locale
 - decalerMois(cle, n) — avance ou recule de n mois
 - nbMois(debut, fin) — nombre de mois, bornes incluses
@@ -41,6 +43,12 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - effortMensuel(cible, debut, fin) — cible divisée par nombre de mois
 - cibleDepuisMensuel(mensuel, nbMois) — cible depuis un montant mensuel
 - suiviObjectif(objectif, versements, moisCourant) — versé, prévu (mois en cours dû après versement), statut
+- evolutionCategories(moisDonnees, categories) — dépenses par catégorie et mois, hausses
+- entreesSorties(donneesMois) — entrées et sorties réelles du mois
+- epargneParMois(versements, objectifs, cles) — versé et prévu au départ
+- progressionObjectif(objectif, versements, cles) — versé et % par mois, baisses
+- raisonsBaisse(courant, precedent, categories, membres) — 3 écarts défavorables en clair
+- projectionObjectif(objectif, versements, moisCourant) — rythme des 3 derniers mois, atteinte
 
 ## js/db.js
 Client Supabase et toutes les requêtes ; lève des erreurs en français.
@@ -50,6 +58,7 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - chargerFoyer() — foyer, membres et membre courant
 - creerFoyer(prenom) / rejoindreFoyer(code, prenom) — RPC foyer
 - chargerMois(foyerId, cle) — mois, revenus, récurrentes, budgets, dépenses, versements
+- chargerPlage(foyerId, debut, fin) — mois ouverts d'une période (+ référence), paginé
 - listerMois(foyerId) — clés des mois ouverts, décroissantes
 - chargerCategories(foyerId) — catégories actives et inactives
 - chargerObjectifs(foyerId) — objectifs et tous les versements
@@ -76,12 +85,14 @@ Store : état courant, notification des vues, rechargement et temps réel.
 - changerMois(cle) — change le mois affiché
 - rechargerEnFond() — recharge, erreur en toast
 - demarrerTempsReel() / arreterTempsReel() — Realtime avec anti-rebond 300 ms
+- surTempsReel(fn) — prévenu à chaque événement Realtime
 
 ## js/ui.js
 Helpers DOM (jamais d'innerHTML pour des données utilisateur).
 - el(tag, attrs, ...enfants) — crée un élément
+- estOrdinateur() / surChangementOrdinateur(cb) — seuil 1024 px, hors impression
 - ajouter(parent, enfants) — ajoute en aplatissant, ignore null
-- ouvrirFeuille(contenu, {titre}) — feuille modale du bas
+- ouvrirFeuille(contenu, {titre}) — feuille du bas, fenêtre sur ordinateur
 - toast(message, {type}) — message temporaire
 - versSaisie(n) — nombre au format de saisie
 - champMontant(options) — champ montant validé en direct
@@ -90,6 +101,7 @@ Helpers DOM (jamais d'innerHTML pour des données utilisateur).
 
 ## js/app.js
 Démarrage et routage : connexion → foyer → ouverture du mois → onglets ; redémarre si le mois a changé.
+`body[data-onglet]` = onglet actif ; sous 1024 px, Rapports bascule sur Budget ; le focus survit aux re-rendus.
 - afficherOnglet(nom, options) — affiche un onglet
 - seDeconnecter() — déconnexion avec message d'erreur
 
@@ -110,10 +122,10 @@ Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue p
 - ouvrirConfirmation(ligne) — saisir le montant d'une charge variable
 
 ## js/vues/depenses.js
-Onglet Dépenses, historique mensuel, formulaire de dépense partagé.
-- formulaireDepense({depense, onValider}) — saisie / modification d'une dépense
+Onglet Dépenses, historique mensuel, formulaire de dépense partagé ; sur ordinateur, tableau + panneau de saisie et budgets.
+- formulaireDepense({depense, onValider, prefixe}) — saisie / modification d'une dépense
 - selecteurMois() — navigation ‹ mois › entre mois ouverts
-- rendreDepenses(conteneur) — journal par date ou catégorie
+- rendreDepenses(conteneur) — journal par date ou catégorie (tableau sur ordinateur)
 - categorieDe(id) / aujourdhui() — utilitaires partagés
 
 ## js/vues/ajout-rapide.js
@@ -122,6 +134,7 @@ Bouton « + » flottant.
 
 ## js/vues/tableau.js
 Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, par personne, graphiques SVG.
+Exporte `COULEURS` et `GRIS_AUTRES` (couleurs des graphiques, réutilisées par les rapports).
 - rendreTableau(conteneur) — tableau de bord du mois affiché
 - bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?
 - editerMembre(membre, mm) — salaire, solde daté, déjà dans le solde
@@ -130,7 +143,7 @@ Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, par 
 ## js/vues/part-membre.js
 Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), partagée ouverture / Budget.
 - formulairePart({membre, cle, valeurs, premiereFois}) — questions, préremplissage si payé fin M-1
-- de(prenom) — « de Dylan » / « d'Amel »
+- de(prenom) — réexporté depuis calc.js
 
 ## js/vues/reglages.js
 Feuilles ouvertes depuis l'onglet Budget.
@@ -142,6 +155,11 @@ Feuilles ouvertes depuis l'onglet Budget.
 Onglet Objectifs : suivi, versements / retraits, archives.
 - rendreObjectifs(conteneur) — liste, création, détail
 - estArchive(objectif) — archivé, atteint ou échu
+
+## js/vues/rapports.js
+Onglet Rapports (ordinateur seulement) : période, évolution des dépenses, épargne versée, un bloc par objectif, impression.
+- rendreRapports(conteneur) — rapport de la période choisie
+- quitterRapports() — coupe chargement et temps réel
 
 ## supabase/migrations/001_schema.sql
 Tables scopées par `foyer_id`, contraintes, index, publication Realtime.
