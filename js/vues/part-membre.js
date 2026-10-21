@@ -1,12 +1,12 @@
 // Part d'un membre pour un mois : son salaire est-il déjà sur le compte, montant, solde.
 // Partagée par l'ouverture du mois (sa part, et celle de l'autre si on la connaît) et l'onglet Budget.
 import {etat} from '../etat.js';
-import {libelleMois, decalerMois} from '../calc.js';
+import {libelleMois, decalerMois, de} from '../calc.js';
 import {el, champMontant, choixOuiNon} from '../ui.js';
 
+export {de};
+
 const nomMois = (cle) => libelleMois(cle).split(' ')[0];
-// « de Dylan », « d'Amel »
-export const de = (prenom) => (/^[aeiouyàâéèêëîïôöûüh]/i.test(prenom) ? `d'${prenom}` : `de ${prenom}`);
 
 // valeurs : {salaire, solde, salaire_dans_solde} ; premiereFois : la part n'a pas encore été remplie ce mois-ci.
 // Payé·e fin du mois précédent (réglage du profil) : la réponse est préremplie sur Oui, toujours modifiable.
