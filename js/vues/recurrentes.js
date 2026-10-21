@@ -67,10 +67,10 @@ function rendreListe(conteneur) {
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
     el('p', {class: 'attenue'}, `Charges fixes · ${libelleMois(etat.moisCle)}`, lectureSeule ? ' · lecture seule' : ''),
     groupes.length
-      ? groupes.map((g) => [
+      ? el('div', {class: 'grille-ordinateur'}, groupes.map((g) => el('section', {},
           el('div', {class: 'titre-groupe'}, el('span', {}, g.titre),
             el('span', {class: 'montant'}, formatEUR(g.lignes.reduce((t, r) => t + Number(r.montant), 0)))),
-          el('ul', {class: 'liste'}, g.lignes.map(ligne))])
+          el('ul', {class: 'liste'}, g.lignes.map(ligne)))))
       : el('p', {class: 'vide-liste'}, 'Aucune charge fixe ce mois-ci.'),
     lectureSeule ? null : el('div', {class: 'actions'},
       el('button', {class: 'btn-secondaire', type: 'button', onclick: () => ouvrirEdition(null)}, '+ Ajouter une charge'),
@@ -296,8 +296,8 @@ function rendreRevue(conteneur) {
 
   brancherSwipe(carte, decider);
 
-  // ajouter() ignore les éléments absents (append écrirait « null »)
-  ajouter(conteneur, [
+  // el() ignore les éléments absents (append écrirait « null ») ; colonne étroite sur ordinateur
+  conteneur.append(el('div', {class: 'colonne-etroite'},
     el('div', {class: 'entete-vue'},
       el('h1', {}, 'Revue des charges'),
       el('span', {class: 'pastille', 'aria-live': 'polite'}, `${revue.index + 1} / ${revue.lignes.length}`)),
@@ -315,7 +315,7 @@ function rendreRevue(conteneur) {
     el('div', {class: 'rangee', style: {marginTop: '8px'}},
       el('button', {class: 'btn-texte', type: 'button', disabled: !revue.historique.length, onclick: annuler,
         'aria-label': 'Annuler le dernier choix'}, '↩ Annuler'),
-      el('button', {class: 'btn-texte', type: 'button', onclick: () => terminerRevue(conteneur)}, 'Terminer'))]);
+      el('button', {class: 'btn-texte', type: 'button', onclick: () => terminerRevue(conteneur)}, 'Terminer'))));
 }
 
 // Glisser au doigt (ou à la souris) : au-delà de 100 px, la décision est prise

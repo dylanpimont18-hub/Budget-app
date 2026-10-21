@@ -25,8 +25,11 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
 - `js/calc.js` — pure calculations (amounts, months, budget summary, goals). No DOM, no network. Tested.
 - `js/db.js` — the only module that talks to Supabase; throws `Error`s with French messages.
 - `js/etat.js` — store: `etat`, `abonner`/`notifier`, `recharger()` (ignores stale responses), Realtime with a 300 ms debounce.
-- `js/app.js` — routing: login → household → month opening → tabs (Récurrentes, Dépenses, Budget, Objectifs).
+- `js/app.js` — routing: login → household → month opening → tabs (Récurrentes, Dépenses, Budget, Objectifs, and
+  Rapports on desktop only).
 - `js/vues/*.js` — one module per screen; each tab re-renders on every `notifier()`.
+- `js/vues/rapports.js` — loads its own range of months with `db.chargerPlage` (never touches `recharger()` or
+  `etat.moisCle`), ignores stale responses and reloads on `surTempsReel`; every figure comes from `calc.js`.
 - Supabase: every table carries `foyer_id`; RLS through `est_membre(foyer_id)`; household creation/joining and month
   opening go through `security definer` RPCs (`creer_foyer`, `rejoindre_foyer`, `ouvrir_mois`, idempotent).
 - Recurring charges and category budgets have a template (`recurrentes`, `categories.budget_defaut`) copied into each
@@ -38,6 +41,9 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
 - Build DOM with `el()` / `ajouter()` from `js/ui.js`: user data goes through `textContent`, never `innerHTML`.
 - Use the CSS tokens on `:root` in `style.css` (wood palette: lichen, walnut, oak, moss, honey, cedar; fonts Fraunces + Figtree from Google Fonts); no hard-coded colours (chart colours in `tableau.js` excepted).
 - Smartphone first: works at 375 px with no horizontal scroll, touch targets ≥ 44 px, respect `env(safe-area-inset-*)`.
+- Desktop is `@media (min-width: 1024px)` only (same threshold as `estOrdinateur()` in `ui.js`): side menu, centred
+  sheets, `.grille-ordinateur` two columns. Below it the phone layout must stay pixel-identical. The Rapports tab
+  exists only on desktop; the app falls back to Budget below 1024 px (but not while printing).
 - Only the public (anon) Supabase key may appear in code; never a service key.
 - Nothing is counted twice (`syntheseMois` in `calc.js`): each member's balance (`solde`, dated `solde_le`) is the
   starting point; add only what is not in it yet (salary unless `salaire_dans_solde`, other income unless

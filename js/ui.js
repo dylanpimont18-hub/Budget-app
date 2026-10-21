@@ -36,7 +36,28 @@ export function ajouter(parent, enfants) {
   }
 }
 
-// Feuille modale qui monte du bas ; fermeture par ✕, clic sur le fond ou Échap.
+// Disposition ordinateur (même seuil que la media query de style.css)
+const requeteOrdinateur = globalThis.matchMedia?.('(min-width: 1024px)');
+
+export const estOrdinateur = () => Boolean(requeteOrdinateur?.matches);
+
+// À l'impression la page est plus étroite que 1024 px : ce faux passage de seuil est ignoré
+// (sinon le rapport imprimé basculerait sur l'onglet Budget). Au retour, on rattrape un vrai changement.
+export function surChangementOrdinateur(cb) {
+  if (!requeteOrdinateur) return;
+  let impression = false;
+  let dernier = requeteOrdinateur.matches;
+  const prevenir = () => {
+    if (impression || globalThis.matchMedia('print').matches || requeteOrdinateur.matches === dernier) return;
+    dernier = requeteOrdinateur.matches;
+    cb(dernier);
+  };
+  requeteOrdinateur.addEventListener('change', prevenir);
+  globalThis.addEventListener('beforeprint', () => { impression = true; });
+  globalThis.addEventListener('afterprint', () => { impression = false; prevenir(); });
+}
+
+// Feuille modale qui monte du bas (fenêtre centrée sur ordinateur) ; fermeture par ✕, clic sur le fond ou Échap.
 export function ouvrirFeuille(contenu, {titre = '', surFermeture} = {}) {
   const conteneur = document.getElementById('feuilles');
   const precedent = document.activeElement;
