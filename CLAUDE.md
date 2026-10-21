@@ -36,7 +36,7 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
 
 - UI language is **French**. Amounts are parsed with `parseMontant` (French keyboard, `12,50`) and displayed with `formatEUR`.
 - Build DOM with `el()` / `ajouter()` from `js/ui.js`: user data goes through `textContent`, never `innerHTML`.
-- Use the CSS tokens on `:root` in `style.css` (terracotta palette from the Excel); no hard-coded colours.
+- Use the CSS tokens on `:root` in `style.css` (wood palette: lichen, walnut, oak, moss, honey, cedar; fonts Fraunces + Figtree from Google Fonts); no hard-coded colours (chart colours in `tableau.js` excepted).
 - Smartphone first: works at 375 px with no horizontal scroll, touch targets ≥ 44 px, respect `env(safe-area-inset-*)`.
 - Only the public (anon) Supabase key may appear in code; never a service key.
 - Nothing is counted twice (`syntheseMois` in `calc.js`): each member's balance (`solde`, dated `solde_le`) is the
