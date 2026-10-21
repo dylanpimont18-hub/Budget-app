@@ -1,19 +1,18 @@
-// Onglet Rapports (ordinateur seulement) : lecture « document » d'une période, de haut en bas, imprimable.
+// Onglet Rapports (ordinateur seulement) : lecture « document » d'une période, de haut en bas, imprimable et exportable.
 // Charge sa propre plage de mois (db.chargerPlage), sans toucher au mois affiché par les autres onglets.
-// Tous les chiffres viennent de calc.js, qui reprend les calculs des onglets Budget et Objectifs.
+// Les chiffres sont assemblés par rapport.js (pur), qui sert aussi aux exports Markdown et JSON.
 import {chargerPlage} from '../db.js';
 import {etat, surTempsReel} from '../etat.js';
-import {formatEUR, libelleMois, decalerMois, nbMois, suiviObjectif, evolutionCategories, entreesSorties, epargneParMois,
-  progressionObjectif, raisonsBaisse, projectionObjectif} from '../calc.js';
-import {el, toast} from '../ui.js';
+import {formatEUR, libelleMois, decalerMois} from '../calc.js';
+import {construireRapport, rapportEnMarkdown, rapportEnJson, texteProjection, libellePeriode, libelleCourt, formatPct}
+  from '../rapport.js';
+import {el, toast, ouvrirFeuille, telecharger} from '../ui.js';
 import {COULEURS, GRIS_AUTRES} from './tableau.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const COULEUR_VERSE = COULEURS[4];
 const COULEUR_DEPENSES = COULEURS[0];
 const formatJour = new Intl.DateTimeFormat('fr-FR', {day: 'numeric', month: 'long', year: 'numeric'});
-const formatPct = (x) => `${x.toLocaleString('fr-FR', {maximumFractionDigits: 1})} %`;
-const nomMois = (cle) => libelleMois(cle).split(' ')[0];
 const dateImpression = () => `Imprimé le ${formatJour.format(new Date())}`;
 
 // Le rapport a pu être affiché la veille : la date est celle de l'impression
@@ -38,8 +37,6 @@ function bornes() {
   if (periode.type === 'plage') return {debut: periode.debut, fin: periode.fin};
   return {debut: decalerMois(fin, -5), fin};
 }
-
-const clesEntre = (debut, fin) => Array.from({length: nbMois(debut, fin)}, (_, i) => decalerMois(debut, i));
 
 export function rendreRapports(conteneur) {
   const ouverture = !actif;
@@ -100,13 +97,20 @@ function changerPeriode(nouvelle) {
 
 function dessiner(conteneur) {
   const {debut, fin} = bornes();
-  conteneur.append(entete(debut, fin));
+  const pret = charge?.debut === debut && charge?.fin === fin;
+  const rapport = pret
+    ? construireRapport({debut, fin, parMois: charge.parMois, reference: charge.reference,
+        categories: etat.donnees.categories, objectifs: etat.donnees.objectifs, versementsTous: etat.donnees.versementsTous,
+        membres: etat.membres, moisCourant: etat.moisCourantCle})
+    : null;
+  const exportable = rapport?.ouverts.length ? rapport : null;
+  conteneur.append(entete(debut, fin, exportable));
 
   if (!etat.donnees.moisDisponibles.length) {
     conteneur.append(el('p', {class: 'vide-liste'}, 'Aucun mois n\'a encore été ouvert : le rapport sera disponible ensuite.'));
     return;
   }
-  if (charge?.debut !== debut || charge?.fin !== fin) {
+  if (!rapport) {
     conteneur.append(erreur
       ? el('div', {class: 'vide-liste'}, el('p', {class: 'message-erreur'}, erreur),
           el('button', {class: 'btn-secondaire', type: 'button', style: {width: 'auto'}, onclick: () => { erreur = null; charger(); redessiner(); }},
@@ -114,43 +118,30 @@ function dessiner(conteneur) {
       : el('p', {class: 'chargement'}, 'Chargement du rapport…'));
     return;
   }
-
-  const cles = clesEntre(debut, fin);
-  const ouverts = cles.filter((c) => charge.parMois[c]);
-  if (!ouverts.length) {
+  if (!rapport.ouverts.length) {
     conteneur.append(el('p', {class: 'vide-liste'}, 'Aucun mois ouvert sur cette période.'));
     return;
   }
 
-  const objectifs = etat.donnees.objectifs;
-  const recoupe = (o) => o.debut <= fin && o.fin >= debut;
-  const enCours = objectifs.filter((o) => !o.archive && recoupe(o));
-  const archives = objectifs.filter((o) => o.archive && recoupe(o));
-
   conteneur.append(
-    sectionEvolution(cles),
-    sectionEpargne(cles, ouverts),
-    ...enCours.map((o) => blocObjectif(o, cles, ouverts)),
-    archives.length
+    sectionEvolution(rapport),
+    sectionEpargne(rapport),
+    ...rapport.objectifs.map((b) => blocObjectif(b, rapport.cles)),
+    rapport.archives.length
       ? el('details', {class: 'repliable archives-rapport'},
-          el('summary', {}, `Objectifs archivés (${archives.length})`),
-          archives.map((o) => blocObjectif(o, cles, ouverts)))
+          el('summary', {}, `Objectifs archivés (${rapport.archives.length})`),
+          rapport.archives.map((b) => blocObjectif(b, rapport.cles)))
       : null);
 }
 
-function titre(debut, fin) {
-  if (debut === fin) return `Rapport · ${libelleMois(fin)}`;
-  const depart = debut.slice(0, 4) === fin.slice(0, 4) ? nomMois(debut) : libelleMois(debut);
-  return `Rapport · ${depart} → ${libelleMois(fin)}`;
-}
-
-function entete(debut, fin) {
+function entete(debut, fin, rapport) {
   return el('header', {class: 'entete-rapport'},
     el('div', {},
-      el('h1', {}, titre(debut, fin)),
+      el('h1', {}, `Rapport · ${libellePeriode(debut, fin)}`),
       el('p', {class: 'attenue date-impression'}, dateImpression())),
     el('div', {class: 'outils-rapport'},
       selecteurPeriode(debut, fin),
+      el('button', {class: 'btn-secondaire', type: 'button', disabled: !rapport, onclick: () => ouvrirExport(rapport)}, '⤓ Exporter'),
       el('button', {class: 'btn-secondaire', type: 'button', onclick: () => window.print()}, '🖨 Imprimer')));
 }
 
@@ -176,23 +167,42 @@ function selecteurPeriode(debut, fin) {
       liste('rapport-fin', 'À', fin, (v) => changerPeriode(ranger(debut, v)))));
 }
 
-const libelleColonne = (cle, cles) => {
-  const memeAnnee = cles[0].slice(0, 4) === cles.at(-1).slice(0, 4);
-  const court = new Intl.DateTimeFormat('fr-FR', memeAnnee ? {month: 'short'} : {month: 'short', year: '2-digit'});
-  const [a, m] = cle.split('-').map(Number);
-  return court.format(new Date(a, m - 1, 1));
-};
+// ── Export (Markdown pour une IA, JSON pour un programme) ──────────────
+
+function ouvrirExport(rapport) {
+  const nom = `rapport-budget-${rapport.debut}-${rapport.fin}`;
+  const markdown = () => rapportEnMarkdown(rapport);
+  let feuille;
+  const copier = async () => {
+    try {
+      await navigator.clipboard.writeText(markdown());
+      feuille.fermer();
+      toast('Rapport copié : colle-le dans ton IA');
+    } catch {
+      toast('Copie impossible : télécharge plutôt le fichier .md', {type: 'erreur'});
+    }
+  };
+  feuille = ouvrirFeuille(el('div', {class: 'formulaire'},
+    el('p', {class: 'attenue', style: {margin: 0}},
+      `Période : ${libellePeriode(rapport.debut, rapport.fin)}. Le Markdown se colle tel quel dans une IA (ChatGPT, Claude…) `
+      + 'et reste lisible ; le JSON contient les données brutes, pour un programme.'),
+    el('button', {class: 'btn-primaire', type: 'button', onclick: copier}, '📋 Copier pour une IA (Markdown)'),
+    el('div', {class: 'rangee'},
+      el('button', {class: 'btn-secondaire', type: 'button', onclick: () => telecharger(`${nom}.md`, markdown(), 'text/markdown')},
+        'Télécharger .md'),
+      el('button', {class: 'btn-secondaire', type: 'button', onclick: () =>
+        telecharger(`${nom}.json`, JSON.stringify(rapportEnJson(rapport), null, 2), 'application/json')}, 'Télécharger .json')),
+    el('p', {class: 'attenue', style: {margin: 0}},
+      'Il contient les salaires, les dépenses et les prénoms du foyer : ne le confie qu\'à un service de confiance.')),
+  {titre: 'Exporter le rapport'});
+}
 
 const nonOuvert = () => el('span', {class: 'non-ouvert'}, 'non ouvert');
 
 // ── Évolution des dépenses ─────────────────────────────────────────────
 
-function sectionEvolution(cles) {
-  const evo = evolutionCategories(cles.map((cle) => ({
-    cle, ouvert: Boolean(charge.parMois[cle]),
-    depenses: charge.parMois[cle]?.depenses ?? [], recurrentes: charge.parMois[cle]?.recurrentes ?? [],
-  })), etat.donnees.categories);
-
+function sectionEvolution(rapport) {
+  const {cles, evolution: evo} = rapport;
   // Courses par défaut, sinon la catégorie la plus dépensée sur la période
   const total = (l) => l.valeurs.reduce((t, v) => t + (v ?? 0), 0);
   if (categorieChoisie !== 'charges' && !evo.lignes.some((l) => l.categorie.id === categorieChoisie)) {
@@ -209,7 +219,7 @@ function sectionEvolution(cles) {
   const section = el('section', {class: 'carte section-rapport'});
   const choisir = (id) => {
     categorieChoisie = id;
-    section.replaceWith(sectionEvolution(cles));
+    section.replaceWith(sectionEvolution(rapport));
   };
   const ligne = (id, nom, serie, classe = '') => el('tr', {
     class: `ligne-choix ${classe} ${id === categorieChoisie ? 'choisie' : ''}`, tabindex: '0', 'aria-current': id === categorieChoisie ? 'true' : null,
@@ -227,14 +237,14 @@ function sectionEvolution(cles) {
       el('table', {class: 'tableau-rapport'},
         el('thead', {}, el('tr', {},
           el('th', {scope: 'col'}, 'Catégorie'),
-          cles.map((c) => el('th', {scope: 'col', class: 'montant'}, libelleColonne(c, cles))),
+          cles.map((c) => el('th', {scope: 'col', class: 'montant'}, libelleCourt(c, cles))),
           el('th', {scope: 'col', class: 'montant'}, 'Moyenne'))),
         el('tbody', {},
           evo.lignes.map((l) => ligne(l.categorie.id, `${l.categorie.icone ?? ''} ${l.categorie.nom}`.trim(), l,
             l.categorie.active ? '' : 'inactive')),
           ligne('charges', 'Charges fixes', evo.chargesFixes, 'ligne-total')))),
     el('h3', {class: 'titre-graphique'}, choisie.nom),
-    graphiqueBarres(cles.map((c, i) => ({libelle: libelleColonne(c, cles), valeurs: [choisie.serie.valeurs[i]]})),
+    graphiqueBarres(cles.map((c, i) => ({libelle: libelleCourt(c, cles), valeurs: [choisie.serie.valeurs[i]]})),
       [{nom: choisie.nom, couleur: categorieChoisie === 'charges' ? COULEURS[1] : COULEUR_DEPENSES}],
       `${choisie.nom} par mois : ${cles.map((c, i) => `${libelleMois(c)} ${choisie.serie.valeurs[i] == null
         ? 'non ouvert' : formatEUR(choisie.serie.valeurs[i])}`).join(', ')}`));
@@ -243,13 +253,8 @@ function sectionEvolution(cles) {
 
 // ── Épargne réellement versée ──────────────────────────────────────────
 
-function sectionEpargne(cles, ouverts) {
-  const objectifs = etat.donnees.objectifs;
-  const versements = ouverts.flatMap((c) => charge.parMois[c].versements);
-  const ep = epargneParMois(versements, objectifs, ouverts);
+function sectionEpargne({cles, epargne: ep}) {
   const duMois = (cle) => ep.mois.find((m) => m.cle === cle);
-  const concernes = objectifs.filter((o) => ep.mois.some((m) => m.parObjectif[o.id] != null));
-
   const series = [{nom: 'Versé', couleur: COULEUR_VERSE}, {nom: 'Prévu au départ', couleur: GRIS_AUTRES}];
   return el('section', {class: 'carte section-rapport'},
     el('h2', {}, 'Épargne réellement versée'),
@@ -257,7 +262,7 @@ function sectionEpargne(cles, ouverts) {
       'Total versé sur la période : ', el('strong', {class: 'montant'}, formatEUR(ep.totalVerse)),
       ' · prévu au départ : ', el('strong', {class: 'montant'}, formatEUR(ep.totalPrevu))),
     el('p', {class: 'attenue'}, '« Prévu au départ » : effort mensuel initial (cible ÷ nombre de mois) des objectifs en cours ce mois-là.'),
-    graphiqueBarres(cles.map((c) => ({libelle: libelleColonne(c, cles),
+    graphiqueBarres(cles.map((c) => ({libelle: libelleCourt(c, cles),
       valeurs: duMois(c) ? [duMois(c).verse, duMois(c).prevu] : [null, null]})), series,
     `Épargne par mois : ${cles.map((c) => (duMois(c)
       ? `${libelleMois(c)} versé ${formatEUR(duMois(c).verse)}, prévu ${formatEUR(duMois(c).prevu)}`
@@ -267,10 +272,10 @@ function sectionEpargne(cles, ouverts) {
       el('table', {class: 'tableau-rapport'},
         el('thead', {}, el('tr', {},
           el('th', {scope: 'col'}, 'Objectif'),
-          cles.map((c) => el('th', {scope: 'col', class: 'montant'}, libelleColonne(c, cles))),
+          cles.map((c) => el('th', {scope: 'col', class: 'montant'}, libelleCourt(c, cles))),
           el('th', {scope: 'col', class: 'montant'}, 'Total'))),
         el('tbody', {},
-          concernes.map((o) => el('tr', {},
+          ep.objectifsVerses.map((o) => el('tr', {},
             el('th', {scope: 'row'}, `${o.icone ?? '🎯'} ${o.nom}`),
             cles.map((c) => el('td', {class: 'montant'}, !duMois(c) ? nonOuvert()
               : (duMois(c).parObjectif[o.id] == null ? '—' : formatEUR(duMois(c).parObjectif[o.id])))),
@@ -287,39 +292,27 @@ function sectionEpargne(cles, ouverts) {
 
 // ── Un bloc par objectif ───────────────────────────────────────────────
 
-function blocObjectif(o, cles, ouverts) {
+function blocObjectif({objectif: o, suivi: s, mois, projection}) {
   const cible = Number(o.cible);
-  const tousVersements = etat.donnees.versementsTous.filter((v) => v.objectif_id === o.id);
-  const s = suiviObjectif({...o, cible}, tousVersements, etat.moisCourantCle);   // mêmes chiffres que l'onglet Objectifs
-
-  // Le premier mois de la période se compare au mois ouvert qui le précède (chargé en plus, hors affichage)
-  const clesProgression = charge.reference ? [charge.reference, ...ouverts] : ouverts;
-  const versementsPlage = clesProgression.flatMap((c) => charge.parMois[c].versements);
-  const progression = progressionObjectif(o, versementsPlage, clesProgression, etat.moisCourantCle);
-
-  const ligneMois = (cle) => {
-    const donnees = charge.parMois[cle];
-    if (!donnees) {
-      return el('tr', {class: 'mois-non-ouvert'}, el('th', {scope: 'row'}, libelleMois(cle)),
+  const ligneMois = (m) => {
+    if (!m.ouvert) {
+      return el('tr', {class: 'mois-non-ouvert'}, el('th', {scope: 'row'}, libelleMois(m.cle)),
         el('td', {colspan: '5'}, nonOuvert()));
     }
-    const i = clesProgression.indexOf(cle);
-    const p = progression[i];
-    const es = entreesSorties(donnees);
-    const raisons = p.baisse
-      ? raisonsBaisse(donnees, charge.parMois[clesProgression[i - 1]], etat.donnees.categories, etat.membres)
-      : [];
+    let pourquoi = '—';
+    if (m.enCours) pourquoi = el('span', {class: 'non-ouvert'}, 'mois en cours');
+    else if (m.raisons.length) pourquoi = m.raisons.map((r, j) => [j ? ' · ' : null, el('span', {class: 'raison'}, r)]);
     return el('tr', {},
-      el('th', {scope: 'row'}, libelleMois(cle)),
-      el('td', {class: 'montant'}, formatEUR(p.verse)),
-      el('td', {class: `montant ${p.baisse ? 'baisse' : ''}`}, formatPct(p.pct)),
-      el('td', {class: 'montant'}, formatEUR(es.entrees)),
-      el('td', {class: 'montant'}, formatEUR(es.sorties),
-        es.estime ? el('span', {class: 'estime', title: 'Une charge variable est encore à confirmer'}, ' estimé') : null),
-      el('td', {class: 'pourquoi'}, p.enCours ? el('span', {class: 'non-ouvert'}, 'mois en cours')
-        : (raisons.length ? raisons.map((r, j) => [j ? ' · ' : null, el('span', {class: 'raison'}, r)]) : '—')));
+      el('th', {scope: 'row'}, libelleMois(m.cle)),
+      el('td', {class: 'montant'}, formatEUR(m.verse)),
+      el('td', {class: `montant ${m.baisse ? 'baisse' : ''}`}, formatPct(m.pct)),
+      el('td', {class: 'montant'}, formatEUR(m.entrees)),
+      el('td', {class: 'montant'}, formatEUR(m.sorties),
+        m.estime ? el('span', {class: 'estime', title: 'Une charge variable est encore à confirmer'}, ' estimé') : null),
+      el('td', {class: 'pourquoi'}, pourquoi));
   };
 
+  // Mêmes chiffres que l'onglet Objectifs (suiviObjectif sur tous les versements)
   return el('section', {class: 'carte section-rapport bloc-objectif'},
     el('div', {class: 'objectif-entete'},
       el('span', {class: 'ligne-icone', 'aria-hidden': 'true'}, o.icone ?? '🎯'),
@@ -340,27 +333,18 @@ function blocObjectif(o, cles, ouverts) {
           el('th', {scope: 'col', class: 'montant'}, 'Entrées'),
           el('th', {scope: 'col', class: 'montant'}, 'Sorties'),
           el('th', {scope: 'col'}, 'Pourquoi'))),
-        el('tbody', {}, cles.map(ligneMois)))),
-    projection(o, tousVersements));
+        el('tbody', {}, mois.map(ligneMois)))),
+    blocProjection(o, projection));
 }
 
-function projection(o, versements) {
-  const p = projectionObjectif(o, versements, etat.moisCourantCle);
-  const echeance = libelleMois(o.fin);
-  const lignes = [];
-  if (p.statut === 'atteint') lignes.push(el('strong', {class: 'niveau-texte-ok'}, 'Atteint ✓'));
-  else if (p.statut === 'sans') lignes.push('Pas encore de mois terminé depuis le début de l\'objectif : pas de projection.');
-  else if (p.statut === 'non_atteint') lignes.push(el('strong', {class: 'niveau-texte-depasse'}, 'À ce rythme, l\'objectif n\'est pas atteint.'));
-  else {
-    lignes.push(el('span', {},
-      `À ce rythme (${formatEUR(p.rythme)}/mois) : atteint en ${libelleMois(p.moisAtteinte)} (prévu : ${echeance})`,
-      p.enAvance ? el('strong', {class: 'niveau-texte-ok'}, ' — en avance') : null));
-  }
-  if (p.statut !== 'atteint') {
-    if (p.echu) lignes.push(`L'échéance (${echeance}) est passée.`);
-    else if (p.effortNecessaire > 0) lignes.push(`Il faudrait ${formatEUR(p.effortNecessaire)}/mois pour tenir ${echeance}.`);
-  }
-  return el('div', {class: 'projection'}, lignes.map((l) => el('p', {}, l)));
+function blocProjection(o, p) {
+  const [verdict, ...suite] = texteProjection(o, p);
+  let ton = null;
+  if (p.statut === 'atteint' || p.enAvance) ton = 'niveau-texte-ok';
+  else if (p.statut === 'non_atteint') ton = 'niveau-texte-depasse';
+  return el('div', {class: 'projection'},
+    el('p', {}, ton ? el('strong', {class: ton}, verdict) : verdict),
+    suite.map((t) => el('p', {}, t)));
 }
 
 // ── Graphiques ─────────────────────────────────────────────────────────

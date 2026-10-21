@@ -90,6 +90,16 @@ export function ouvrirFeuille(contenu, {titre = '', surFermeture} = {}) {
   return {fermer};
 }
 
+// Fait télécharger un fichier texte généré (export du rapport)
+export function telecharger(nom, contenu, type) {
+  const url = URL.createObjectURL(new Blob([contenu], {type: `${type};charset=utf-8`}));
+  const lien = el('a', {href: url, download: nom, hidden: true});
+  document.body.append(lien);
+  lien.click();
+  lien.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function toast(message, {type = 'info'} = {}) {
   const t = el('div', {class: `toast toast-${type}`, role: type === 'erreur' ? 'alert' : 'status'}, message);
   document.body.append(t);
