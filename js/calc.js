@@ -80,6 +80,34 @@ export function niveauBudget(budget, depense) {
   return 'ok';
 }
 
+// Statut d'une charge du mois : montant à saisir d'abord, puis déjà partie du compte, sinon encore à prélever
+export function statutRecurrente(r) {
+  if (r.a_confirmer) return 'a-confirmer';
+  return r.dans_solde ? 'prelevee' : 'a-prelever';
+}
+
+// Total des charges du mois réparti par statut (montant et nombre de lignes)
+export function etatRecurrentes(recurrentes) {
+  const parStatut = {'prelevee': [], 'a-prelever': [], 'a-confirmer': []};
+  for (const r of recurrentes) parStatut[statutRecurrente(r)].push(r.montant);
+  const resume = (liste) => ({total: somme(liste), nb: liste.length});
+  return {total: somme(recurrentes.map((r) => r.montant)), prelevees: resume(parStatut.prelevee),
+    aPrelever: resume(parStatut['a-prelever']), aConfirmer: resume(parStatut['a-confirmer'])};
+}
+
+// Budgets du mois d'un coup d'œil : prévu, dépensé, niveau global et nombre de catégories par niveau
+// lignes : [{budget, depense}] (une par catégorie suivie)
+export function resumeBudgets(lignes) {
+  const prevu = somme(lignes.map((l) => l.budget));
+  const depense = somme(lignes.map((l) => l.depense));
+  const compte = {ok: 0, alerte: 0, depasse: 0};
+  for (const l of lignes) {
+    const n = niveauBudget(l.budget, l.depense);
+    if (n in compte) compte[n] += 1;
+  }
+  return {prevu, depense, reste: arrondi(prevu - depense), niveau: niveauBudget(prevu, depense), ...compte};
+}
+
 // Le solde saisi est le point de départ : on n'ajoute ou ne retire que ce qui n'y était pas encore.
 // membres    : [{membre_id, salaire, solde, solde_le, solde_a, salaire_dans_solde}]
 // revenus    : [{montant, dans_solde}]        recurrentes : [{montant, dans_solde}]

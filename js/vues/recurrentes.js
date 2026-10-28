@@ -3,7 +3,7 @@
 import {ajouterRecurrente, modifierRecurrente, confirmerMontant, retirerDuMois, restaurerDansMois, supprimerRecurrente}
   from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
-import {formatEUR, libelleMois} from '../calc.js';
+import {formatEUR, libelleMois, statutRecurrente, etatRecurrentes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
 
 const ICONES = ['🏡', '🏦', '⚡', '💧', '🛡️', '📱', '👶', '🍽️', '🧾', '🚗', '💡', '📺', '🏋️', '🐾', '💳', '📦'];
@@ -46,17 +46,17 @@ function rendreListe(conteneur) {
     ...etat.membres.map((m) => ({titre: `Perso · ${m.prenom}`, lignes: recurrentes.filter((r) => r.membre_id === m.id)}))]
     .filter((g) => g.lignes.length);
 
+  // Chaque charge porte la couleur de son statut : bordure à gauche et pastille
   const ligne = (r) => {
-    let sous = null;
-    if (r.a_confirmer) sous = el('span', {class: 'pastille statut-retard'}, 'Montant à confirmer');
-    else if (r.dans_solde) sous = 'Déjà prélevée';
-    else if (r.variable) sous = 'Montant variable';
-    return el('li', {},
+    const statut = statutRecurrente(r);
+    return el('li', {class: `bord-${statut}`},
       el('button', {class: 'ligne', type: 'button', onclick: () => (r.a_confirmer ? ouvrirConfirmation(r) : ouvrirEdition(r))},
         el('span', {class: 'ligne-icone', 'aria-hidden': 'true'}, r.icone ?? '📌'),
         el('span', {class: 'ligne-texte'}, el('div', {class: 'ligne-titre'}, r.libelle),
-          sous ? el('div', {class: 'ligne-sous'}, sous) : null),
-        el('span', {class: 'ligne-montant montant'}, formatEUR(Number(r.montant)))));
+          el('div', {class: 'ligne-sous pastilles'},
+            el('span', {class: `pastille petite statut-${statut}`}, LIBELLES_STATUT[statut]),
+            r.variable && !r.a_confirmer ? el('span', {class: 'pastille petite'}, 'Variable') : null)),
+        el('span', {class: `ligne-montant montant${statut === 'prelevee' ? ' attenue' : ''}`}, formatEUR(Number(r.montant)))));
   };
 
   ajouter(conteneur, [
@@ -65,6 +65,7 @@ function rendreListe(conteneur) {
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
     el('p', {class: 'attenue'}, `Charges fixes · ${libelleMois(etat.moisCle)}`,
       moisPasse ? ' · mois passé : tes corrections ne changent que ce mois' : ''),
+    recurrentes.length ? el('div', {class: 'carte'}, repartitionCharges(etatRecurrentes(recurrentes))) : null,
     groupes.length
       ? el('div', {class: 'grille-ordinateur'}, groupes.map((g) => el('section', {},
           el('div', {class: 'titre-groupe'}, el('span', {}, g.titre),
@@ -80,6 +81,26 @@ function rendreListe(conteneur) {
             rendreRevue(conteneur);
           }}, 'Revoir les charges')
         : null)]);
+}
+
+const LIBELLES_STATUT = {'prelevee': 'Déjà prélevée', 'a-prelever': 'À prélever', 'a-confirmer': 'Montant à confirmer'};
+
+// Barre colorée des charges du mois (déjà prélevé, à prélever, à confirmer) et sa légende ; aussi dans l'onglet Budget
+export function repartitionCharges(e, {legende = true} = {}) {
+  const parts = [['prelevee', 'Déjà prélevé', e.prelevees], ['a-prelever', 'À prélever', e.aPrelever],
+    ['a-confirmer', 'À confirmer', e.aConfirmer]].filter(([, , p]) => p.nb > 0);
+  const largeur = (p) => (e.total > 0 ? (p.total / e.total) * 100 : 100 / parts.length);
+  return [
+    el('div', {class: 'barre-statuts', role: 'img',
+      'aria-label': parts.map(([, libelle, p]) => `${libelle} ${formatEUR(p.total)}`).join(', ')},
+    parts.map(([statut, , p]) => el('span', {class: `statut-${statut}`, style: {width: `${largeur(p)}%`}}))),
+    legende
+      ? el('ul', {class: 'legende-statuts'}, parts.map(([statut, libelle, p]) => el('li', {},
+          el('span', {class: `puce-statut statut-${statut}`, 'aria-hidden': 'true'}),
+          el('span', {}, `${libelle} (${p.nb})`),
+          el('span', {class: 'montant'}, formatEUR(p.total)))))
+      : null,
+  ];
 }
 
 // Saisie rapide du montant d'une charge variable (aussi ouverte depuis l'onglet Budget)

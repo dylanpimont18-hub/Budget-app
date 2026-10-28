@@ -47,6 +47,8 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - nbMois(debut, fin) — nombre de mois, bornes incluses
 - libelleMois(cle) — « octobre 2026 »
 - niveauBudget(budget, depense) — vide / ok / alerte / dépassé
+- statutRecurrente(r) / etatRecurrentes(recurrentes) — charge déjà prélevée, à prélever ou à confirmer ; totaux par statut
+- resumeBudgets(lignes) — prévu, dépensé, reste, niveau global et nombre de catégories par niveau
 - syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements, depensesAvant}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits, dépenses d'avant le 1er après le solde)
 - bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
 - depensesParCategorie(depenses) — total et part par membre

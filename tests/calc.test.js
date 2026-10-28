@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseMontant, formatEUR, cleMois, decalerMois, nbMois, moisActif, peutOuvrirEnAvance, libelleMois, niveauBudget,
+  statutRecurrente, etatRecurrentes, resumeBudgets,
   syntheseMois, bilanMois, depensesParCategorie, totalParMembre, topPostes,
   effortMensuel, cibleDepuisMensuel, suiviObjectif, de,
   evolutionCategories, entreesSorties, epargneParMois, progressionObjectif, raisonsBaisse, projectionObjectif,
@@ -36,6 +37,24 @@ test('niveauBudget', () => {
   assert.equal(niveauBudget(750, 600), 'alerte');   // 80 % pile
   assert.equal(niveauBudget(750, 751), 'depasse');
   assert.equal(niveauBudget(0, 10), 'depasse');
+});
+test('statutRecurrente et etatRecurrentes', () => {
+  const lignes = [
+    {montant: '800', dans_solde: true},
+    {montant: 60.5, dans_solde: false},
+    {montant: 40, dans_solde: false},
+    {montant: 90, a_confirmer: true, dans_solde: true},   // à confirmer passe avant « déjà prélevée »
+  ];
+  assert.deepEqual(lignes.map(statutRecurrente), ['prelevee', 'a-prelever', 'a-prelever', 'a-confirmer']);
+  assert.deepEqual(etatRecurrentes(lignes), {total: 990.5, prelevees: {total: 800, nb: 1},
+    aPrelever: {total: 100.5, nb: 2}, aConfirmer: {total: 90, nb: 1}});
+  assert.deepEqual(etatRecurrentes([]).aPrelever, {total: 0, nb: 0});
+});
+test('resumeBudgets compte les catégories par niveau', () => {
+  const r = resumeBudgets([{budget: 100, depense: 20}, {budget: 100, depense: 85}, {budget: 50, depense: 70.1},
+    {budget: 0, depense: 0}]);
+  assert.deepEqual(r, {prevu: 250, depense: 175.1, reste: 74.9, niveau: 'ok', ok: 1, alerte: 1, depasse: 1});
+  assert.equal(resumeBudgets([]).niveau, 'vide');
 });
 test('syntheseMois sans solde : salaires + revenus − charges − budgets − objectifs', () => {
   const s = syntheseMois({membres: [{salaire: 1800, solde: null}, {salaire: 2100, solde: null}],

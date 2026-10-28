@@ -2,12 +2,12 @@
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
 import {modifierBudget, modifierMoisMembre, regenererCode, retirerMembre} from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
-import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
+import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
 import {selecteurMois, aujourdhui, categorieDe} from './depenses.js';
 import {formulairePart, de} from './part-membre.js';
 import {ouvrirRevenus, ouvrirCategories, ouvrirProfil} from './reglages.js';
-import {ouvrirConfirmation} from './recurrentes.js';
+import {ouvrirConfirmation, repartitionCharges} from './recurrentes.js';
 import {copier} from './connexion.js';
 import {seDeconnecter, ouvrirMoisSuivant} from '../app.js';
 import {VERSION} from '../version.js';
@@ -132,9 +132,10 @@ function confirmerSalaire(membre, mm) {
 function cartes(s) {
   const modifiable = estMoisCourant();
   const sousPct = (valeur) => (s.disponible > 0 ? `${formatPct(pct(valeur, s.disponible))} du disponible` : '—');
-  const carte = (etiquette, valeur, sous) => el('div', {class: 'carte-stat'},
+  const carte = (etiquette, valeur, sous, barre = null) => el('div', {class: 'carte-stat'},
     el('div', {class: 'etiquette-stat'}, etiquette),
     el('div', {class: 'valeur-stat montant'}, formatEUR(valeur)),
+    barre,
     sous.map((t) => el('div', {class: 'sous-stat'}, t)));
 
   let sousTexte;
@@ -179,11 +180,23 @@ function cartes(s) {
       ? el('button', {class: 'carte-stat large', type: 'button', style: {textAlign: 'left', font: 'inherit'},
           'aria-label': `Disponible ${formatEUR(s.disponible)}, gérer les autres revenus`, onclick: ouvrirRevenus}, disponible)
       : el('div', {class: 'carte-stat large'}, disponible),
-    carte('Charges à prélever', s.chargesAPrelever, sousCharges),
-    carte('Budgets à venir', s.budgetsAVenir, sousBudgets),
+    carte('Charges à prélever', s.chargesAPrelever, sousCharges,
+      etat.donnees.recurrentes.length ? repartitionCharges(etatRecurrentes(etat.donnees.recurrentes), {legende: false}) : null),
+    carte('Budgets à venir', s.budgetsAVenir, sousBudgets, jaugeBudgets()),
     carte('Objectifs', s.objectifsAVenir, s.objectifsAVenir !== s.objectifs
       ? [`sur ${formatEUR(s.objectifs)}, le reste déjà viré`] : [sousPct(s.objectifsAVenir)]));
 }
+
+// Dépensé / prévu sur l'ensemble des budgets, coloré comme les jauges des catégories
+function jaugeBudgets() {
+  const b = bilanMois({budgets: etat.donnees.budgets, depenses: etat.donnees.depenses});
+  return b.prevu > 0 ? jauge({...b, niveau: niveauBudget(b.prevu, b.depense)}, 'Budgets') : null;
+}
+
+const jauge = (r, nom) => el('div', {class: `jauge niveau-${r.niveau}`, role: 'meter', 'aria-valuemin': '0',
+  'aria-valuemax': String(r.prevu), 'aria-valuenow': String(r.depense),
+  'aria-label': `${nom} : ${formatEUR(r.depense)} dépensés sur ${formatEUR(r.prevu)}`},
+el('span', {style: {width: `${r.prevu > 0 ? Math.min(100, (r.depense / r.prevu) * 100) : 100}%`}}));
 
 // ── Bilan d'un mois passé ──────────────────────────────────────────────
 
@@ -230,7 +243,7 @@ function categories() {
       .map((m) => `${m.prenom} ${formatEUR(parMembre[m.id])}`)
       .join(' · ');
     const libelleBudget = `${formatEUR(depense)} / ${formatEUR(budget)}`;
-    return el('li', {class: 'ligne', style: {display: 'block'}},
+    return el('li', {class: `ligne bord-niveau-${niveau}`, style: {display: 'block'}},
       el('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}},
         el('span', {'aria-hidden': 'true'}, c.icone ?? '•'),
         el('span', {class: 'ligne-texte ligne-titre'}, c.nom),
@@ -248,6 +261,7 @@ function categories() {
   };
 
   return el('div', {},
+    suivies.length ? resumeCategories(resumeBudgets(suivies)) : null,
     suivies.length ? el('ul', {class: 'liste'}, suivies.map(ligne)) : el('p', {class: 'vide-liste'}, 'Aucun budget ce mois-ci.'),
     aZero.length
       ? el('details', {class: 'repliable'},
@@ -255,6 +269,20 @@ function categories() {
           el('ul', {class: 'liste'}, aZero.map(ligne)))
       : null,
     courant ? el('button', {class: 'btn-texte', type: 'button', onclick: ouvrirCategories}, 'Gérer les catégories') : null);
+}
+
+// Vue d'ensemble des budgets : dépensé sur prévu, reste, et nombre de catégories par couleur
+function resumeCategories(r) {
+  const compte = (n, niveau, texte) => (n ? el('span', {class: `pastille petite niveau-${niveau}`}, texte) : null);
+  return el('div', {class: 'carte resume-budgets'},
+    el('div', {class: 'resume-budgets-ligne'},
+      el('span', {}, el('strong', {class: 'montant'}, formatEUR(r.depense)), ` dépensés sur ${formatEUR(r.prevu)} prévus`),
+      el('span', {class: `montant niveau-texte-${r.niveau}`}, `Reste ${formatEUR(r.reste, {signe: true})}`)),
+    jauge(r, 'Tous les budgets'),
+    el('div', {class: 'pastilles'},
+      compte(r.ok, 'ok', `✓ ${r.ok} dans le budget`),
+      compte(r.alerte, 'alerte', `${r.alerte} bientôt ${r.alerte > 1 ? 'atteints' : 'atteint'}`),
+      compte(r.depasse, 'depasse', `${r.depasse} ${r.depasse > 1 ? 'dépassés' : 'dépassé'}`)));
 }
 
 function editerBudget(categorie, actuel) {
