@@ -164,7 +164,7 @@ Exporte `COULEURS` et `GRIS_AUTRES` (couleurs des graphiques, réutilisées par 
 
 ## js/vues/part-membre.js
 Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), partagée ouverture / Budget.
-- formulairePart({membre, cle, valeurs, premiereFois}) — questions, préremplissage si payé fin M-1
+- formulairePart({membre, cle, valeurs, premiereFois}) — solde d'abord (obligatoire si le salaire y est déjà, montant du salaire alors facultatif), préremplissage si payé fin M-1
 - de(prenom) — réexporté depuis calc.js
 
 ## js/vues/reglages.js
