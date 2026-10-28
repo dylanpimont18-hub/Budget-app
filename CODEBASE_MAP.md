@@ -51,6 +51,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - resumeBudgets(lignes) — prévu, dépensé, reste, niveau global et nombre de catégories par niveau
 - syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements, depensesAvant}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits, dépenses d'avant le 1er après le solde)
 - colonnesMembres({membres, ids, revenus, recurrentes, depenses, versements, depensesAvant}) — reste de chacun : solde, salaire et revenus à venir (communs partagés), part des communes (compte joint), charges perso, dépenses payées, objectifs
+- virementCommun({ids, recurrentes, revenus}) — à virer chacun sur le compte commun : (charges communes − revenus communs) / n
 - bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
 - depensesParCategorie(depenses) — total et part par membre
 - totalParMembre(depenses) — total dépensé par membre
@@ -163,7 +164,7 @@ Bouton « + » flottant : Dépense ou Revenu.
 
 ## js/vues/par-personne.js
 Colonnes « Par personne » de l'onglet Dépenses (calc.colonnesMembres) : avatar, reste, barre des sorties, détail.
-- blocParPersonne() — une carte par membre ; toucher une carte ouvre sa part du mois
+- blocParPersonne() — carte « compte commun » (virement de chacun), puis une carte par membre ; toucher une carte ouvre sa part du mois
 
 ## js/vues/tableau.js
 Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, graphiques SVG.

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseMontant, formatEUR, cleMois, decalerMois, nbMois, moisActif, peutOuvrirEnAvance, libelleMois, niveauBudget,
-  statutRecurrente, etatRecurrentes, resumeBudgets, colonnesMembres, faisabiliteObjectif,
+  statutRecurrente, etatRecurrentes, resumeBudgets, colonnesMembres, faisabiliteObjectif, virementCommun,
   syntheseMois, bilanMois, depensesParCategorie, totalParMembre, topPostes,
   effortMensuel, cibleDepuisMensuel, suiviObjectif, de,
   evolutionCategories, entreesSorties, epargneParMois, progressionObjectif, raisonsBaisse, projectionObjectif,
@@ -424,4 +424,11 @@ test('faisabiliteObjectif croise le rythme et le reste libre', () => {
   assert.equal(faisabiliteObjectif(o, p({statut: 'non_atteint'}), null).niveau, 'difficile');
   assert.equal(faisabiliteObjectif(o, p({statut: 'atteint'}), null).niveau, 'atteint');
   assert.equal(faisabiliteObjectif(o, p({echu: true}), 9999).niveau, 'difficile');
+});
+test('virementCommun : (charges communes − revenus communs) / 2', () => {
+  const v = virementCommun({ids: ['a', 'b'],
+    recurrentes: [{montant: 900, membre_id: null}, {montant: '85.5', dans_solde: true}, {montant: 30, membre_id: 'b'}],
+    revenus: [{montant: 300, membre_id: null}, {montant: 200, membre_id: 'a'}]});
+  assert.deepEqual(v, {charges: 985.5, revenus: 300, total: 685.5, parPersonne: 342.75});
+  assert.equal(virementCommun({ids: ['a', 'b'], recurrentes: [{montant: 100}], revenus: [{montant: 300}]}).parPersonne, 0);
 });

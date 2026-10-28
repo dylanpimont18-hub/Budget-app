@@ -2,7 +2,7 @@
 // Les charges communes passent par le compte joint (chacun y vire sa part) ; un revenu commun est partagé de même.
 // Les budgets non encore dépensés restent au niveau du foyer : ils sortiront de la colonne de qui paiera.
 import {etat, estMoisCourant} from '../etat.js';
-import {formatEUR, colonnesMembres, bilanMois} from '../calc.js';
+import {formatEUR, colonnesMembres, bilanMois, virementCommun} from '../calc.js';
 import {el} from '../ui.js';
 import {editerPart} from './part-membre.js';
 
@@ -32,13 +32,33 @@ export function blocParPersonne() {
   const budgetsRestants = Math.max(0, b.prevu - b.depense);
 
   return el('section', {class: 'par-personne'},
+    carteCompteCommun(virementCommun({ids, recurrentes: d.recurrentes, revenus: d.revenus})),
     el('div', {class: 'grille-personnes'}, etat.membres.map((m, i) =>
       cartePersonne(m, i, colonnes.find((c) => c.membre_id === m.id), d.membresMois.find((x) => x.membre_id === m.id)))),
     el('p', {class: 'note-personnes'},
-      'Communes : la part de chacun à virer sur le compte joint (un revenu commun est partagé de même).',
+      'Communes : la part de chacun des charges communes pas encore prélevées (un revenu commun est partagé de même).',
       budgetsRestants > 0 && estMoisCourant()
         ? ` Encore ${formatEUR(budgetsRestants)} de budgets à dépenser : ils sortiront de la colonne de qui paie.`
         : ''));
+}
+
+// Ce que chacun vire sur le compte commun ce mois-ci
+function carteCompteCommun(v) {
+  if (!v.charges && !v.revenus) return null;
+  const n = etat.membres.length;
+  const ligne = (libelle, texte, classe = '') => el('li', {class: classe},
+    el('span', {class: 'detail-libelle'}, libelle), el('span', {class: 'montant'}, texte));
+  return el('div', {class: 'carte-commun'},
+    el('div', {class: 'commun-entete'},
+      el('span', {class: 'commun-icone', 'aria-hidden': 'true'}, '🏦'),
+      el('span', {class: 'commun-titre'}, n > 1 ? 'À virer chacun sur le compte commun' : 'À virer sur le compte commun'),
+      el('span', {class: 'commun-montant montant'}, formatEUR(v.parPersonne))),
+    el('ul', {class: 'detail-personne commun-detail'},
+      ligne('Charges communes', formatEUR(v.charges)),
+      v.revenus ? ligne('Revenus communs (CAF…)', `−${formatEUR(v.revenus)}`) : null,
+      n > 1 ? ligne(`Total ÷ ${n}`, `${formatEUR(Math.max(0, v.total))} ÷ ${n}`, 'commun-total') : null),
+    v.total < 0 ? el('p', {class: 'personne-sous', style: {margin: '6px 0 0'}},
+      `Les revenus communs couvrent les charges : ${formatEUR(-v.total)} de plus sur le compte commun.`) : null);
 }
 
 function cartePersonne(m, rang, c, mm) {

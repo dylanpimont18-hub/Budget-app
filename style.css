@@ -753,6 +753,21 @@ details.repliable > summary {
 /* ── Par personne (onglet Dépenses) ───────────────────────────────────── */
 
 .par-personne { margin-bottom: 16px; }
+.carte-commun {
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background: var(--blanc);
+    border: 1px solid var(--filet);
+    border-radius: var(--rayon);
+    box-shadow: inset 4px 0 0 var(--noyer-clair);
+}
+.commun-entete { display: flex; align-items: center; gap: 10px; }
+.commun-icone { font-size: 1.3rem; flex-shrink: 0; }
+.commun-titre { flex: 1; min-width: 0; font-weight: 600; font-size: 0.9rem; line-height: 1.25; }
+.commun-montant { font-family: var(--serif); font-weight: 600; font-size: 1.45rem; letter-spacing: -0.01em; flex-shrink: 0; }
+.commun-detail { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--filet); }
+.commun-detail .commun-total { font-weight: 600; }
+.commun-detail .commun-total .detail-libelle { color: var(--txt); }
 .grille-personnes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .grille-personnes > :only-child { grid-column: 1 / -1; }
 .carte-personne {

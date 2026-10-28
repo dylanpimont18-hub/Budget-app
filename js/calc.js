@@ -207,6 +207,16 @@ export function colonnesMembres({membres = [], ids = [], revenus = [], recurrent
   });
 }
 
+// Virement de chacun vers le compte commun ce mois-ci : (charges communes − revenus communs) / nombre de membres.
+// Toutes les charges et revenus communs du mois comptent, déjà passés ou non : c'est le montant du mois.
+export function virementCommun({ids = [], recurrentes = [], revenus = []}) {
+  const commun = (x) => !ids.includes(x.membre_id);
+  const charges = somme(recurrentes.filter(commun).map((r) => r.montant));
+  const revenusCommuns = somme(revenus.filter(commun).map((r) => r.montant));
+  const total = arrondi(charges - revenusCommuns);
+  return {charges, revenus: revenusCommuns, total, parPersonne: arrondi(Math.max(0, total) / Math.max(1, ids.length))};
+}
+
 // Bilan d'un mois terminé : budgets prévus, dépensé, catégories dépassées (de la plus dépassée à la moins)
 export function bilanMois({budgets = [], depenses = []}) {
   const parCategorie = new Map();
