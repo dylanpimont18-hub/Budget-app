@@ -44,7 +44,7 @@ export function ouvrirRevenus() {
           el('button', {class: 'ligne', type: 'button', onclick: () => { feuille.fermer(); editerRevenu(r); }},
             el('span', {class: 'ligne-texte'},
               el('div', {class: 'ligne-titre'}, r.libelle),
-              el('div', {class: 'ligne-sous'}, r.dans_solde ? 'Déjà sur le compte' : 'À recevoir')),
+              el('div', {class: 'ligne-sous'}, `${pourQui(r)} · ${r.dans_solde ? 'Déjà sur le compte' : 'À recevoir'}`)),
             el('span', {class: 'ligne-montant montant'}, formatEUR(Number(r.montant)))))))
       : el('p', {class: 'vide-liste'}, 'Aucun autre revenu ce mois-ci.'),
     el('button', {class: 'btn-secondaire', type: 'button', onclick: () => { feuille.fermer(); editerRevenu(null); }},
@@ -52,35 +52,68 @@ export function ouvrirRevenus() {
   feuille = ouvrirFeuille(contenu, {titre: 'Autres revenus'});
 }
 
-function editerRevenu(revenu) {
+const pourQui = (r) => (r.membre_id ? (etat.membres.find((m) => m.id === r.membre_id)?.prenom ?? 'Ancien membre') : 'Commun');
+
+// Formulaire d'un revenu (aussi dans le bouton « + » rapide) : libellé, montant, pour qui, déjà sur le compte.
+// onValider(champs) est asynchrone ; une erreur levée s'affiche dans le formulaire.
+export function formulaireRevenu({revenu = null, onValider, libelleBouton}) {
   const libelle = el('input', {class: 'champ', id: 'revenu-libelle', value: revenu?.libelle ?? '', autocomplete: 'off',
-    placeholder: 'Ex. : prime, remboursement'});
+    placeholder: 'Ex. : prime, CAF, remboursement'});
   const montant = champMontant({id: 'revenu-montant', etiquette: 'Montant', valeur: revenu?.montant ?? null, strict: true});
+  // Commun (CAF…) : partagé dans les colonnes de chacun ; sinon perso (prime…)
+  let membreId = revenu?.membre_id ?? null;
+  const choix = [{id: null, nom: 'Commun'}, ...etat.membres.map((m) => ({id: m.id, nom: m.prenom}))];
+  const pour = el('div', {class: 'segment', role: 'group', 'aria-label': 'Pour qui'}, choix.map((c) =>
+    el('button', {type: 'button', 'aria-pressed': String(c.id === membreId), onclick: (e) => {
+      membreId = c.id;
+      for (const b of pour.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
+    }}, c.nom)));
   const dejaRecu = caseACocher({etiquette: 'Déjà sur le compte quand le solde a été saisi', valeur: revenu?.dans_solde ?? false});
   const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
-  const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, revenu ? 'Enregistrer' : 'Ajouter');
-  let feuille;
-  const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: (e) => {
+  const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, libelleBouton ?? (revenu ? 'Enregistrer' : 'Ajouter'));
+  const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
     e.preventDefault();
+    message.textContent = '';
     const m = montant.valider();
     if (!libelle.value.trim()) { message.textContent = 'Indique un libellé'; return; }
     if (!m.ok) return;
-    const champs = {libelle: libelle.value.trim(), montant: m.valeur, dans_solde: dejaRecu.lire()};
-    executer({bouton, message, feuille, succes: revenu ? 'Revenu modifié' : 'Revenu ajouté',
-      action: () => (revenu ? modifierRevenu(revenu.id, champs)
-                            : ajouterRevenu(etat.foyer.id, etat.donnees.mois.id, champs))});
+    bouton.disabled = true;
+    try {
+      await onValider({libelle: libelle.value.trim(), montant: m.valeur, dans_solde: dejaRecu.lire(), membre_id: membreId});
+    } catch (err) {
+      message.textContent = err.message;
+      bouton.disabled = false;
+    }
   }},
   el('div', {}, el('label', {class: 'etiquette', for: 'revenu-libelle'}, 'Libellé'), libelle),
   montant.element,
+  el('div', {}, el('span', {class: 'etiquette'}, 'Pour'), pour),
   dejaRecu.element,
   el('p', {class: 'attenue', style: {margin: 0}}, 'Coché, le revenu est déjà compris dans un solde : il ne s\'y ajoute pas.'),
-  message, bouton,
-  revenu ? el('button', {class: 'btn-danger', type: 'button', onclick: (e) => {
-    if (!confirm(`Supprimer « ${revenu.libelle} » ?`)) return;
-    executer({bouton: e.currentTarget, message, feuille, succes: 'Revenu supprimé', action: () => supprimerRevenu(revenu.id)});
-  }}, 'Supprimer') : null);
+  message, bouton);
+  return {form, message, focus: () => libelle.focus()};
+}
+
+function editerRevenu(revenu) {
+  let feuille;
+  const succes = async (texte) => {
+    feuille.fermer();
+    toast(texte);
+    await recharger();
+  };
+  const {form, message, focus} = formulaireRevenu({revenu, onValider: async (champs) => {
+    if (revenu) await modifierRevenu(revenu.id, champs);
+    else await ajouterRevenu(etat.foyer.id, etat.donnees.mois.id, champs);
+    await succes(revenu ? 'Revenu modifié' : 'Revenu ajouté');
+  }});
+  if (revenu) {
+    form.append(el('button', {class: 'btn-danger', type: 'button', onclick: (e) => {
+      if (!confirm(`Supprimer « ${revenu.libelle} » ?`)) return;
+      executer({bouton: e.currentTarget, message, feuille, succes: 'Revenu supprimé', action: () => supprimerRevenu(revenu.id)});
+    }}, 'Supprimer'));
+  }
   feuille = ouvrirFeuille(form, {titre: revenu ? 'Modifier le revenu' : 'Nouveau revenu'});
-  libelle.focus();
+  focus();
 }
 
 // ── Catégories ─────────────────────────────────────────────────────────

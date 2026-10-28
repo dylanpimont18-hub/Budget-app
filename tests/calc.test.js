@@ -395,13 +395,15 @@ test('colonnesMembres : communes partagées, perso et dépenses au payeur, rien 
       {membre_id: 'b', montant: 60, date: '2026-10-30'},
     ],
     versements: [{montant: 200, membre_id: null}, {montant: 50, membre_id: 'b'}],
+    revenus: [{montant: 300, membre_id: null}, {montant: 150, membre_id: 'a'}, {montant: 40, membre_id: 'b', dans_solde: true}],
   });
   assert.deepEqual(a, {membre_id: 'a', renseigne: true, solde: 2500, depensesDepuisSolde: 0, salaireARecevoir: 0,
-    communes: 500, chargesPerso: 30, depensesPayees: 80, objectifs: 100, reste: 1790});
+    revenusARecevoir: 300, communes: 500, chargesPerso: 30, depensesPayees: 80, objectifs: 100, reste: 2090});
+  assert.equal(b.revenusARecevoir, 150);   // moitié de la CAF ; sa prime est déjà dans son solde
   assert.equal(b.salaireARecevoir, 1800);
   assert.equal(b.chargesPerso, 0);
   assert.equal(b.objectifs, 150);
-  assert.equal(b.reste, 400 + 1800 - 500 - 60 - 150);
+  assert.equal(b.reste, 400 + 1800 + 150 - 500 - 60 - 150);
 });
 test('colonnesMembres : part non remplie et membre seul', () => {
   const [seul] = colonnesMembres({ids: ['a'], membres: [], recurrentes: [{montant: 90, membre_id: null}]});

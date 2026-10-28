@@ -77,7 +77,9 @@ export async function rendreOuverture(conteneur, {apres, annuler}) {
     lignesRevenus.push(ligne);
     listeRevenus.append(ligne.element);
   };
-  if (precedent?.revenus.length) precedent.revenus.forEach((r) => ajouterRevenu(r.libelle, r.montant));
+  // Seuls les revenus communs (CAF…) reviennent d'un mois sur l'autre ; une prime perso est ponctuelle
+  const communs = precedent?.revenus.filter((r) => !r.membre_id) ?? [];
+  if (communs.length) communs.forEach((r) => ajouterRevenu(r.libelle, r.montant));
   else REVENUS_PAR_DEFAUT.forEach((l) => ajouterRevenu(l));
 
   // Objectifs actifs ce mois-ci

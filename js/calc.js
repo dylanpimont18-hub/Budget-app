@@ -174,12 +174,13 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
   };
 }
 
-// Une colonne par membre : son solde, son salaire s'il n'y est pas encore, moins sa part de ce qui reste à sortir.
+// Une colonne par membre : son solde, son salaire et ses revenus s'ils n'y sont pas encore, moins sa part de ce qui
+// reste à sortir. Un revenu commun (CAF, membre_id null) est partagé comme les charges communes.
 // Les charges communes passent par le compte joint : chacun y vire sa part (montant / nombre de membres).
 // Charges perso et dépenses ne pèsent que sur leur payeur ; un versement commun (membre_id null) est partagé.
 // Les budgets non encore dépensés restent au niveau du foyer : on ne sait pas encore qui paiera.
 // membres : membresMois des membres actifs (même forme que syntheseMois) ; ids : identifiants des membres actifs.
-export function colonnesMembres({membres = [], ids = [], recurrentes = [], depenses = [], versements = [],
+export function colonnesMembres({membres = [], ids = [], revenus = [], recurrentes = [], depenses = [], versements = [],
   depensesAvant = []}) {
   const avecSolde = membres.some((m) => m.solde != null);
   const {soldes, dejaDeduite} = deductions(membres);
@@ -187,6 +188,7 @@ export function colonnesMembres({membres = [], ids = [], recurrentes = [], depen
   const aSortir = (x) => !(avecSolde && x.dans_solde);
   const commun = (x) => !ids.includes(x.membre_id);
   const communes = arrondi(somme(recurrentes.filter((r) => commun(r) && aSortir(r)).map((r) => r.montant)) / parts);
+  const revenusCommuns = arrondi(somme(revenus.filter((r) => commun(r) && aSortir(r)).map((r) => r.montant)) / parts);
   const versementsCommuns = arrondi(somme(versements.filter((v) => commun(v) && aSortir(v)).map((v) => v.montant)) / parts);
 
   return ids.map((id) => {
@@ -195,11 +197,12 @@ export function colonnesMembres({membres = [], ids = [], recurrentes = [], depen
     const solde = m?.solde == null ? null : Number(m.solde);
     const depensesDepuisSolde = soldes.has(id) ? somme(siens(depensesAvant).filter((d) => !dejaDeduite(d)).map((d) => d.montant)) : 0;
     const salaireARecevoir = m && !(m.salaire_dans_solde && m.solde != null) ? Number(m.salaire) || 0 : 0;
+    const revenusARecevoir = arrondi(somme(siens(revenus).filter(aSortir).map((r) => r.montant)) + revenusCommuns);
     const chargesPerso = somme(siens(recurrentes).filter(aSortir).map((r) => r.montant));
     const depensesPayees = somme(siens(depenses).filter((d) => !dejaDeduite(d)).map((d) => d.montant));
     const objectifs = arrondi(somme(siens(versements).filter(aSortir).map((v) => v.montant)) + versementsCommuns);
-    const reste = arrondi((solde ?? 0) - depensesDepuisSolde + salaireARecevoir - communes - chargesPerso - depensesPayees - objectifs);
-    return {membre_id: id, renseigne: Boolean(m?.renseigne), solde, depensesDepuisSolde, salaireARecevoir,
+    const reste = arrondi((solde ?? 0) - depensesDepuisSolde + salaireARecevoir + revenusARecevoir - communes - chargesPerso - depensesPayees - objectifs);
+    return {membre_id: id, renseigne: Boolean(m?.renseigne), solde, depensesDepuisSolde, salaireARecevoir, revenusARecevoir,
       communes, chargesPerso, depensesPayees, objectifs, reste};
   });
 }

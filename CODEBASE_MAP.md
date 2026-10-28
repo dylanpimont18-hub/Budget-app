@@ -50,7 +50,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - statutRecurrente(r) / etatRecurrentes(recurrentes) — charge déjà prélevée, à prélever ou à confirmer ; totaux par statut
 - resumeBudgets(lignes) — prévu, dépensé, reste, niveau global et nombre de catégories par niveau
 - syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements, depensesAvant}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits, dépenses d'avant le 1er après le solde)
-- colonnesMembres({membres, ids, recurrentes, depenses, versements, depensesAvant}) — reste de chacun : solde, salaire à venir, part des communes (compte joint), charges perso, dépenses payées, objectifs
+- colonnesMembres({membres, ids, revenus, recurrentes, depenses, versements, depensesAvant}) — reste de chacun : solde, salaire et revenus à venir (communs partagés), part des communes (compte joint), charges perso, dépenses payées, objectifs
 - bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
 - depensesParCategorie(depenses) — total et part par membre
 - totalParMembre(depenses) — total dépensé par membre
@@ -94,7 +94,7 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - confirmerMontant(ligneMois, montant, {modele}) — montant réel d'une charge variable
 - retirerDuMois / restaurerDansMois — retrait du mois seulement, annulation
 - supprimerRecurrente(ligne) — retire du mois, désactive le modèle
-- ajouterRevenu / modifierRevenu / supprimerRevenu — autres revenus du mois
+- ajouterRevenu / modifierRevenu / supprimerRevenu — autres revenus du mois (membre_id : perso, null : commun)
 - ajouterDepense / modifierDepense / supprimerDepense — dépenses ponctuelles
 - modifierBudget(foyerId, moisId, categorieId, montant, {modele}) — budget du mois et défaut (mois seul si modele = false)
 - creerCategorie / modifierCategorie / activerCategorie — catégories (jamais supprimées)

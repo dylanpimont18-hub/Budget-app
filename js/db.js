@@ -169,7 +169,7 @@ export async function chargerMois(foyerId, cle) {
   const [membresMois, revenus, recurrentes, budgets] = await Promise.all([
     sb.from('mois_membres')
       .select('membre_id, salaire, solde, solde_le, solde_a, salaire_dans_solde, salaire_recu, renseigne').eq('mois_id', id),
-    sb.from('revenus_mois').select('id, libelle, montant, dans_solde').eq('mois_id', id).order('libelle'),
+    sb.from('revenus_mois').select('id, libelle, montant, dans_solde, membre_id').eq('mois_id', id).order('libelle'),
     sb.from('recurrentes_mois')
       .select('id, recurrente_id, libelle, icone, montant, ordre, dans_solde, variable, a_confirmer, membre_id').eq('mois_id', id)
       .order('ordre').order('libelle'),
@@ -374,13 +374,14 @@ export async function supprimerRecurrente(ligneMois) {
 
 // ── Autres revenus du mois ─────────────────────────────────────────────
 
-export async function ajouterRevenu(foyerId, moisId, {libelle, montant, dans_solde}) {
-  verifier(await sb.from('revenus_mois').insert({foyer_id: foyerId, mois_id: moisId, libelle, montant, dans_solde}),
+// membre_id : revenu perso (prime…) ; null = commun (CAF…)
+export async function ajouterRevenu(foyerId, moisId, {libelle, montant, dans_solde, membre_id = null}) {
+  verifier(await sb.from('revenus_mois').insert({foyer_id: foyerId, mois_id: moisId, libelle, montant, dans_solde, membre_id}),
     "Impossible d'ajouter le revenu.");
 }
 
-export async function modifierRevenu(id, {libelle, montant, dans_solde}) {
-  verifier(await sb.from('revenus_mois').update({libelle, montant, dans_solde}).eq('id', id),
+export async function modifierRevenu(id, {libelle, montant, dans_solde, membre_id = null}) {
+  verifier(await sb.from('revenus_mois').update({libelle, montant, dans_solde, membre_id}).eq('id', id),
     'Impossible de modifier le revenu.');
 }
 

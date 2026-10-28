@@ -320,7 +320,7 @@ function editerBudget(categorie, actuel) {
 // ses charges perso, ce qu'elle a payé et ses versements ; les budgets restants sont au niveau du foyer.
 function blocMembres() {
   const d = etat.donnees;
-  const colonnes = colonnesMembres({membres: d.membresMois, ids: etat.membres.map((m) => m.id), recurrentes: d.recurrentes,
+  const colonnes = colonnesMembres({membres: d.membresMois, ids: etat.membres.map((m) => m.id), revenus: d.revenus, recurrentes: d.recurrentes,
     depenses: d.depenses, versements: d.versements, depensesAvant: d.depensesAvant});
   const ligne = (libelle, valeur, signe) => (valeur ? el('div', {class: 'detail-stat'}, el('span', {}, libelle),
     el('span', {class: 'montant'}, `${signe}${formatEUR(valeur)}`)) : null);
@@ -343,6 +343,7 @@ function blocMembres() {
               el('span', {class: 'montant'}, formatEUR(c.solde ?? 0))),
               ligne('Depuis le solde', c.depensesDepuisSolde, '−'),
               ligne('Salaire', c.salaireARecevoir, '+'),
+              ligne('Revenus', c.revenusARecevoir, '+'),
               ligne('Communes', c.communes, '−'),
               ligne('Perso', c.chargesPerso, '−'),
               ligne('Dépenses', c.depensesPayees, '−'),
@@ -353,7 +354,7 @@ function blocMembres() {
         onclick: () => editerMembre(m, mm)}, contenu);
     })),
     el('p', {class: 'attenue', style: {margin: '0 0 12px', fontSize: '0.85rem'}},
-      'Communes : la part de chacun à virer sur le compte joint.',
+      'Communes : la part de chacun à virer sur le compte joint ; un revenu commun (CAF) est partagé de même.',
       budgetsRestants > 0 && estMoisCourant()
         ? ` Encore ${formatEUR(budgetsRestants)} de budgets à dépenser : chaque dépense sortira de la colonne de qui la paie.`
         : ''));
