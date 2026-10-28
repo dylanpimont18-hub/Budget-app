@@ -2,14 +2,14 @@
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
 import {modifierBudget, modifierMoisMembre} from '../db.js';
 import {etat, recharger} from '../etat.js';
-import {formatEUR, libelleMois, syntheseMois, bilanMois, niveauBudget, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
+import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
 import {selecteurMois, aujourdhui, categorieDe} from './depenses.js';
 import {formulairePart, de} from './part-membre.js';
 import {ouvrirRevenus, ouvrirCategories, ouvrirProfil} from './reglages.js';
 import {ouvrirConfirmation} from './recurrentes.js';
 import {copier} from './connexion.js';
-import {seDeconnecter} from '../app.js';
+import {seDeconnecter, ouvrirMoisSuivant} from '../app.js';
 import {VERSION} from '../version.js';
 
 // Teintes de bois et de forêt : noyer, ardoise, miel, prune, mousse
@@ -87,6 +87,14 @@ function bandeaux() {
     resultat.push(el('div', {class: 'bandeau-info', role: 'status'},
       el('span', {}, titre),
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => confirmerSalaire(membre, mm)}, 'Oui, confirmer')));
+  }
+  // Fin du mois calendaire : la paye du mois suivant peut déjà être là
+  if (etat.moisCourantCle === cleMois() && peutOuvrirEnAvance()) {
+    const suivant = libelleMois(decalerMois(etat.moisCourantCle, 1)).split(' ')[0];
+    const ouvert = d.moisDisponibles.includes(decalerMois(etat.moisCourantCle, 1));
+    resultat.push(el('div', {class: 'bandeau-info discret', role: 'status'},
+      el('span', {}, ouvert ? `${suivant[0].toUpperCase()}${suivant.slice(1)} est déjà ouvert` : `Paye reçue ? Ouvre ${suivant} en avance`),
+      el('button', {class: 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant}, ouvert ? 'Y aller' : 'Ouvrir')));
   }
   return resultat;
 }

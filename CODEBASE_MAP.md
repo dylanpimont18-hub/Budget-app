@@ -42,6 +42,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - formatEUR(n, {signe, entier}) — formate en euros fr-FR
 - de(prenom) — « de Dylan » / « d'Amel »
 - cleMois(date) — clé 'YYYY-MM' en heure locale
+- moisActif(disponibles, date) / peutOuvrirEnAvance(date) — mois en cours : le suivant s'il a été ouvert en avance (possible dès le 20)
 - decalerMois(cle, n) — avance ou recule de n mois
 - nbMois(debut, fin) — nombre de mois, bornes incluses
 - libelleMois(cle) — « octobre 2026 »
@@ -124,6 +125,7 @@ Démarrage et routage : connexion → foyer → ouverture du mois → onglets ; 
 `body[data-onglet]` = onglet actif ; sous 1024 px, Rapports bascule sur Budget ; le focus survit aux re-rendus.
 - afficherOnglet(nom, options) — affiche un onglet
 - seDeconnecter() — déconnexion avec message d'erreur
+- ouvrirMoisSuivant() — ouverture en avance du mois suivant (paye reçue avant le 1er)
 
 ## js/vues/connexion.js
 Connexion / inscription, création ou adhésion au foyer.
@@ -134,7 +136,7 @@ Connexion / inscription, création ou adhésion au foyer.
 
 ## js/vues/ouverture.js
 Ouverture du mois : sa part (salaire, solde), celle de l'autre en option, revenus déjà reçus, versements (puis revue des charges).
-- rendreOuverture(conteneur, {apres}) — formulaire d'ouverture du mois
+- rendreOuverture(conteneur, {apres, annuler}) — formulaire d'ouverture du mois
 
 ## js/vues/recurrentes.js
 Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue par swipe (montant modifiable, déjà prélevée).
@@ -156,13 +158,13 @@ Bouton « + » flottant.
 Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, par personne, graphiques SVG.
 Exporte `COULEURS` et `GRIS_AUTRES` (couleurs des graphiques, réutilisées par les rapports).
 - rendreTableau(conteneur) — tableau de bord du mois affiché
-- bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?
+- bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?, ouvrir le mois suivant en avance
 - editerMembre(membre, mm) — salaire, solde daté, déjà dans le solde
 - bilan() — bilan d'un mois passé (remplace la prévision)
 
 ## js/vues/part-membre.js
 Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), partagée ouverture / Budget.
-- formulairePart({membre, cle, valeurs, premiereFois}) — questions, préremplissage si payé fin M-1
+- formulairePart({membre, cle, valeurs, premiereFois}) — solde d'abord (obligatoire si le salaire y est déjà, montant du salaire alors facultatif), préremplissage si payé fin M-1
 - de(prenom) — réexporté depuis calc.js
 
 ## js/vues/reglages.js

@@ -1,4 +1,4 @@
-// Part d'un membre pour un mois : son salaire est-il déjà sur le compte, montant, solde.
+// Part d'un membre pour un mois : solde, salaire déjà compris dedans ou non, montant du salaire.
 // Partagée par l'ouverture du mois (sa part, et celle de l'autre si on la connaît) et l'onglet Budget.
 import {etat} from '../etat.js';
 import {libelleMois, decalerMois, de} from '../calc.js';
@@ -15,37 +15,38 @@ export function formulairePart({membre, cle, valeurs = {}, premiereFois = true})
   const mois = nomMois(cle);
   const prefixe = `part-${membre.id}`;
 
-  const salaire = champMontant({id: `${prefixe}-salaire`, etiquette: 'Salaire', valeur: valeurs.salaire ?? membre.salaire_defaut});
+  // Le solde vient en premier : c'est avec lui qu'on vit. Si le salaire y est déjà, son montant est facultatif.
+  const solde = champMontant({id: `${prefixe}-solde`, etiquette: soi ? 'Solde actuel de ton compte' : `Solde du compte ${de(membre.prenom)}`,
+    valeur: valeurs.solde ?? null, negatif: true, vide: 'null', grand: true});
+  const salaireProbable = valeurs.salaire ?? membre.salaire_defaut ?? 0;
+  const salaire = champMontant({id: `${prefixe}-salaire`, etiquette: 'Salaire', valeur: salaireProbable, vide: 'null'});
   const aideSalaire = el('p', {class: 'attenue', style: {margin: 0}});
   const blocSalaire = el('div', {class: 'formulaire', hidden: true}, salaire.element, aideSalaire);
   const erreur = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
   const afficherSalaire = (oui) => {
     if (oui == null) return;
-    salaire.element.querySelector('label').textContent = oui ? 'Salaire reçu' : 'Salaire attendu';
-    aideSalaire.textContent = oui ? 'Il est déjà compris dans le solde ci-dessous.' : 'Il sera ajouté au solde dans le calcul.';
+    salaire.element.querySelector('label').textContent = oui ? 'Montant reçu (facultatif)' : 'Salaire attendu';
+    aideSalaire.textContent = oui ? 'Déjà compris dans le solde : il ne sert qu\'aux rapports.' : 'Il sera ajouté au solde dans le calcul.';
     blocSalaire.hidden = false;
     erreur.textContent = '';
   };
 
   let question;
-  if (!premiereFois) question = `Salaire de ${mois} déjà compris dans le solde ?`;
-  else if (soi) question = `Ton salaire de ${mois} est déjà sur ton compte ?`;
-  else question = `Le salaire de ${mois} ${de(membre.prenom)} est déjà sur son compte ?`;
+  if (!premiereFois) question = `Salaire de ${mois} déjà compris dans le solde ?`;
+  else if (soi) question = `Ton salaire de ${mois} est déjà dans ce solde ?`;
+  else question = `Le salaire de ${mois} ${de(membre.prenom)} est déjà dans ce solde ?`;
   const reponseInitiale = premiereFois ? (membre.paie_mois_precedent ? true : null) : Boolean(valeurs.salaire_dans_solde);
   const recu = choixOuiNon({etiquette: question, valeur: reponseInitiale, non: premiereFois ? 'Pas encore' : 'Non',
     surChange: afficherSalaire});
   afficherSalaire(reponseInitiale);
-
-  const solde = champMontant({id: `${prefixe}-solde`, etiquette: soi ? 'Solde actuel de ton compte' : `Solde du compte ${de(membre.prenom)}`,
-    valeur: valeurs.solde ?? null, negatif: true, vide: 'null'});
 
   const indice = premiereFois
     ? el('p', {class: 'attenue', style: {margin: 0}}, `Payé fin ${nomMois(decalerMois(cle, -1))} pour ${mois} ? Réponds Oui.`)
     : null;
 
   return {
-    element: el('div', {class: 'formulaire'}, el('div', {}, recu.element, indice, erreur), blocSalaire, solde.element),
-    focus: () => (recu.lire() == null ? recu.element.querySelector('button') : salaire.input).focus(),
+    element: el('div', {class: 'formulaire'}, solde.element, el('div', {}, recu.element, indice, erreur), blocSalaire),
+    focus: () => solde.input.focus(),
     repondu: () => recu.lire() != null,
     soldeSaisi: () => solde.lire().valeur != null,
     // {ok, valeurs} ; signale l'oubli de la question et les montants invalides
@@ -58,7 +59,19 @@ export function formulairePart({membre, cle, valeurs = {}, premiereFois = true})
         return {ok: false};
       }
       if (!s.ok || !o.ok) return {ok: false};
-      return {ok: true, valeurs: {membre_id: membre.id, salaire: s.valeur, solde: o.valeur, salaire_dans_solde: recu.lire()}};
+      const oui = recu.lire();
+      // Salaire déjà sur le compte : sans solde, rien ne permettrait de le compter
+      if (oui && o.valeur == null) {
+        erreur.textContent = `Saisis ${soi ? 'ton' : 'son'} solde : c'est lui qui sert de point de départ`;
+        solde.input.focus();
+        return {ok: false};
+      }
+      if (!oui && s.valeur == null) {
+        erreur.textContent = 'Indique le salaire attendu';
+        salaire.input.focus();
+        return {ok: false};
+      }
+      return {ok: true, valeurs: {membre_id: membre.id, salaire: s.valeur ?? salaireProbable, solde: o.valeur, salaire_dans_solde: oui}};
     },
   };
 }

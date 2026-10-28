@@ -15,7 +15,7 @@ function titreOuverture(cle) {
   return /^[aeiouyéèêh]/i.test(libelle) ? `Ouverture d'${libelle}` : `Ouverture de ${libelle}`;
 }
 
-export async function rendreOuverture(conteneur, {apres}) {
+export async function rendreOuverture(conteneur, {apres, annuler}) {
   const cle = etat.moisCourantCle;
   const section = el('section', {}, el('h1', {}, titreOuverture(cle)), el('p', {class: 'chargement'}, 'Chargement…'));
   conteneur.append(section);
@@ -142,7 +142,8 @@ export async function rendreOuverture(conteneur, {apres}) {
 
   section.replaceChildren(
     el('h1', {}, titreOuverture(cle)),
-    el('p', {class: 'attenue'}, 'Nouveau mois : note ce qui est déjà arrivé sur les comptes, pour que rien ne soit compté deux fois.'),
+    el('p', {class: 'attenue'}, annuler ? 'Ouverture en avance : ta paye est arrivée avant le 1er.' : 'Nouveau mois :',
+      ' note ce qui est déjà arrivé sur les comptes, pour que rien ne soit compté deux fois.'),
     el('form', {class: 'formulaire', onsubmit: valider, novalidate: true},
       el('div', {class: 'carte formulaire'},
         el('h2', {}, `Ta part · ${moi.prenom}`),
@@ -164,5 +165,7 @@ export async function rendreOuverture(conteneur, {apres}) {
       message,
       btnValider,
       el('p', {class: 'attenue', style: {textAlign: 'center', margin: 0}},
-        'Ensuite, tu passeras en revue les charges du mois.')));
+        'Ensuite, tu passeras en revue les charges du mois.'),
+      // Ouverture en avance : on peut revenir au mois calendaire
+      annuler ? el('button', {class: 'btn-texte', type: 'button', onclick: annuler}, 'Pas maintenant') : null));
 }
