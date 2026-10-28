@@ -6,7 +6,8 @@ begin;
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at) values
   ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'dylan@test.local', '', now(), now()),
   ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'amel@test.local', '', now(), now()),
-  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'intrus@test.local', '', now(), now());
+  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'intrus@test.local', '', now(), now()),
+  ('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'tiers@test.local', '', now(), now());
 
 set local role authenticated;
 
@@ -26,12 +27,20 @@ begin
   assert f.code_invitation ~ '^[A-HJ-NP-Z2-9]{6}$', 'code d''invitation mal formé : ' || f.code_invitation;
   select count(*) into n from public.categories where foyer_id = f.id;
   assert n = 10, 'attendu 10 catégories, obtenu ' || n;
+  -- Aucune donnée personnelle : ni charges, ni budgets, ni salaire
   select count(*) into n from public.recurrentes where foyer_id = f.id;
-  assert n = 9, 'attendu 9 récurrentes, obtenu ' || n;
-  select sum(montant) into s from public.recurrentes where foyer_id = f.id;
-  assert s = 900, 'total des récurrentes attendu 900, obtenu ' || s;
+  assert n = 0, 'attendu 0 récurrente, obtenu ' || n;
+  select count(*) into n from public.categories where foyer_id = f.id and budget_defaut <> 0;
+  assert n = 0, 'attendu des budgets à 0, obtenu ' || n || ' non nuls';
   select salaire_defaut into s from public.membres where user_id = auth.uid();
-  assert s = 1800, 'salaire_defaut Dylan attendu 1800, obtenu ' || s;
+  assert s = 0, 'salaire_defaut attendu 0, obtenu ' || s;
+
+  -- Jeu d'essai : 9 charges et un budget Courses
+  insert into public.recurrentes (foyer_id, libelle, montant, ordre)
+  select f.id, l, 100, o from unnest(array['Prêt', 'Énergie', 'Eau', 'Assurances', 'Abonnements',
+    'Garde des enfants (Pajemploi)', 'Cantine', 'Transport', 'Impôts']) with ordinality as t(l, o);
+  update public.categories set budget_defaut = 750 where foyer_id = f.id and nom = 'Courses';
+  update public.membres set salaire_defaut = 1800 where user_id = auth.uid();
 
   perform set_config('test.membre_dylan', (select id::text from public.membres where user_id = auth.uid()), true);
   perform set_config('test.cat_courses', (select id::text from public.categories where foyer_id = f.id and nom = 'Courses'), true);
@@ -60,7 +69,8 @@ begin
   select count(*) into n from public.membres;
   assert n = 2, 'Amel devrait voir 2 membres, obtenu ' || n;
   select salaire_defaut into s from public.membres where user_id = auth.uid();
-  assert s = 2100, 'salaire_defaut Amel attendu 2100, obtenu ' || s;
+  assert s = 0, 'salaire_defaut Amel attendu 0, obtenu ' || s;
+  update public.membres set salaire_defaut = 2100 where user_id = auth.uid();
 
   -- Amel ne peut modifier que sa propre ligne membre
   update public.membres set prenom = 'Pirate' where id = current_setting('test.membre_dylan')::uuid;
@@ -81,11 +91,22 @@ do $$
 declare
   n int;
 begin
-  begin
+  -- Code inconnu : null, et l'essai est compté ; au 11e essai raté dans l'heure, refus
+  assert public.rejoindre_foyer('ZZZZZZ', 'X') is null, 'code inconnu : attendu null';
+  for i in 2..10 loop
     perform public.rejoindre_foyer('ZZZZZZ', 'X');
+  end loop;
+  begin
+    perform public.rejoindre_foyer(current_setting('test.code'), 'X');
     raise exception 'pas d''erreur';
   exception when others then
-    assert sqlerrm = 'code_invalide', 'code inconnu : attendu code_invalide, obtenu ' || sqlerrm;
+    assert sqlerrm = 'trop_d_essais', '11e essai : attendu trop_d_essais, obtenu ' || sqlerrm;
+  end;
+  begin
+    select count(*) into n from public.essais_invitation;
+    raise exception 'pas d''erreur';
+  exception when others then
+    assert sqlstate = '42501', 'essais_invitation lisible : attendu refus (42501), obtenu ' || sqlstate || ' ' || sqlerrm;
   end;
 
   select count(*) into n from public.categories; assert n = 0, 'intrus voit des catégories';
@@ -101,6 +122,17 @@ begin
   exception when others then
     assert sqlstate = '42501', 'insert intrus : attendu refus RLS (42501), obtenu ' || sqlstate || ' ' || sqlerrm;
   end;
+end $$;
+
+-- ── Un 3e compte qui connaît le code : le foyer est complet ─────────
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000004","role":"authenticated"}', true);
+
+do $$
+begin
+  perform public.rejoindre_foyer(current_setting('test.code'), 'Tiers');
+  raise exception 'pas d''erreur';
+exception when others then
+  assert sqlerrm = 'foyer_complet', '3e membre : attendu foyer_complet, obtenu ' || sqlerrm;
 end $$;
 
 -- ── Ouverture des mois, mois sauté, modèle à jour ───────────────────
@@ -169,7 +201,8 @@ begin
   janv := r->>'mois_id';
 
   select * into mm from public.mois_membres where mois_id = janv and membre_id = current_setting('test.membre_dylan')::uuid;
-  assert mm.salaire = 1850 and mm.solde = 500 and mm.solde_le = current_date, 'Dylan : salaire, solde ou date du solde faux';
+  assert mm.salaire = 1850 and mm.solde = 500 and mm.solde_le = (now() at time zone 'Europe/Paris')::date and mm.solde_a = now(),
+    'Dylan : salaire, solde, date (heure de Paris) ou moment du solde faux';
   assert mm.salaire_dans_solde and mm.salaire_recu and mm.renseigne, 'Dylan payé : attendu dans_solde, reçu et renseigné';
 
   select mm2.* into mm from public.mois_membres mm2 join public.membres mb on mb.id = mm2.membre_id
@@ -200,7 +233,10 @@ declare
 begin
   r := public.ouvrir_mois('2027-01',
     (select jsonb_agg(jsonb_build_object('membre_id', id, 'salaire', 2200, 'solde', -80, 'salaire_dans_solde', false))
-     from public.membres where user_id = auth.uid()), '[]', '[]');
+     from public.membres where user_id = auth.uid()), '[{"libelle":"caf","montant":100},{"libelle":"Prime","montant":50}]', '[]');
+  -- Ses autres revenus sont gardés, sans doublon de libellé (la CAF existait déjà)
+  assert (select count(*) from public.revenus_mois where mois_id = current_setting('test.janv')::uuid) = 2,
+    'Amel : attendu CAF + Prime, sans doublon';
   assert not (r->>'cree')::boolean and r->>'mois_id' = current_setting('test.janv'), 'Amel : mois déjà ouvert attendu';
   select * into mm from public.mois_membres where mois_id = current_setting('test.janv')::uuid
     and membre_id = (select id from public.membres where user_id = auth.uid());
@@ -250,6 +286,38 @@ begin
   exception when others then
     assert sqlstate = '23514', 'cible = 0 : attendu violation de contrainte, obtenu ' || sqlstate || ' ' || sqlerrm;
   end;
+end $$;
+
+-- ── Code régénéré, membre retiré ────────────────────────────────────
+do $$
+declare
+  code text;
+  r jsonb;
+  n int;
+begin
+  code := public.regenerer_code();
+  assert code <> current_setting('test.code') and code ~ '^[A-HJ-NP-Z2-9]{6}$', 'nouveau code attendu';
+  begin
+    perform public.retirer_membre(current_setting('test.membre_dylan')::uuid);
+    raise exception 'pas d''erreur';
+  exception when others then
+    assert sqlerrm = 'pas_soi_meme', 'se retirer soi-même : attendu pas_soi_meme, obtenu ' || sqlerrm;
+  end;
+  perform set_config('test.code2', public.retirer_membre((select id from public.membres where prenom = 'Amel')), true);
+  assert current_setting('test.code2') <> code, 'retirer un membre doit changer le code';
+  r := public.ouvrir_mois('2027-02', '[]', '[]', '[]');
+  select count(*) into n from public.mois_membres where mois_id = (r->>'mois_id')::uuid;
+  assert n = 1, 'février : seul Dylan doit avoir une part, obtenu ' || n;
+end $$;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+
+do $$
+declare
+  n int;
+begin
+  select count(*) into n from public.depenses; assert n = 0, 'Amel retirée voit encore les dépenses';
+  select count(*) into n from public.mois; assert n = 0, 'Amel retirée voit encore les mois';
 end $$;
 
 select 'rls_et_rpc : OK' as resultat;

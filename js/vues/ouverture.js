@@ -86,6 +86,7 @@ export async function rendreOuverture(conteneur, {apres, annuler}) {
     const versements = etat.donnees.versementsTous.filter((v) => v.objectif_id === o.id);
     const propose = suiviObjectif(o, versements, cle).effortRecalcule;
     const champ = nouveauChamp({id: `versement-${o.id}`, etiquette: 'Versement ce mois-ci', valeur: propose, vide: 'zero'});
+    const dejaVire = caseACocher({etiquette: 'Déjà viré (compris dans le solde)'});
     let qui = null;
     const boutons = [...etat.membres.map((m) => ({id: m.id, nom: m.prenom})), {id: null, nom: 'Commun'}].map((choix) =>
       el('button', {type: 'button', 'aria-pressed': String(choix.id === qui), onclick: (e) => {
@@ -96,8 +97,9 @@ export async function rendreOuverture(conteneur, {apres, annuler}) {
       element: el('div', {class: 'carte formulaire'},
         el('h3', {style: {margin: 0}}, `${o.icone ?? '🎯'} ${o.nom}`),
         champ.element,
+        dejaVire.element,
         el('div', {}, el('span', {class: 'etiquette'}, 'Versé par'), el('div', {class: 'segment'}, boutons))),
-      lire: () => ({objectif_id: o.id, montant: champ.lire().valeur, membre_id: qui}),
+      lire: () => ({objectif_id: o.id, montant: champ.lire().valeur, membre_id: qui, dans_solde: dejaVire.lire()}),
     };
   });
 
@@ -129,9 +131,11 @@ export async function rendreOuverture(conteneur, {apres, annuler}) {
         parts,
         lignesRevenus.map((l) => l.lire()).filter((r) => r.libelle && r.montant > 0)
           .map((r) => ({...r, dans_solde: avecSolde && r.dans_solde})),
-        lignesObjectifs.map((l) => l.lire()).filter((v) => v.montant),
+        lignesObjectifs.map((l) => l.lire()).filter((v) => v.montant).map((v) => ({...v, dans_solde: avecSolde && v.dans_solde})),
         []);
-      if (resultat && !resultat.cree) toast('Le mois était déjà ouvert : seule ta part a été ajoutée.');
+      if (resultat && !resultat.cree) {
+        toast('Le mois était déjà ouvert : ta part et tes ajouts y ont été ajoutés (sans doublon ni écrasement).');
+      }
       await recharger();
       apres();
     } catch (err) {
@@ -142,8 +146,8 @@ export async function rendreOuverture(conteneur, {apres, annuler}) {
 
   section.replaceChildren(
     el('h1', {}, titreOuverture(cle)),
-    el('p', {class: 'attenue'}, annuler ? 'Ouverture en avance : ta paye est arrivée avant le 1er.' : 'Nouveau mois :',
-      ' note ce qui est déjà arrivé sur les comptes, pour que rien ne soit compté deux fois.'),
+    el('p', {class: 'attenue'}, annuler ? 'Ouverture en avance : ta paye est arrivée avant le 1er. Note' : 'Nouveau mois : note',
+      ' ce qui est déjà arrivé sur les comptes, pour que rien ne soit compté deux fois.'),
     el('form', {class: 'formulaire', onsubmit: valider, novalidate: true},
       el('div', {class: 'carte formulaire'},
         el('h2', {}, `Ta part · ${moi.prenom}`),

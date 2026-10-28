@@ -316,3 +316,43 @@ test('moisActif : le mois suivant dès qu\'il est ouvert en avance', () => {
   assert.equal(peutOuvrirEnAvance(le28), true);
   assert.equal(peutOuvrirEnAvance(new Date(2026, 9, 5)), false);
 });
+
+test('syntheseMois : dépense du jour du solde, enregistrée avant ou après lui', () => {
+  const membres = [{membre_id: 'D', salaire: 0, solde: 1000, solde_le: '2026-10-28', solde_a: '2026-10-28T18:00:00Z',
+    salaire_dans_solde: true}];
+  const budgets = [{categorie_id: 'c', montant: 500}];
+  const depenses = [
+    {categorie_id: 'c', membre_id: 'D', montant: 80, date: '2026-10-28', cree_le: '2026-10-28T09:00:00Z'},   // avant le solde
+    {categorie_id: 'c', membre_id: 'D', montant: 20, date: '2026-10-28', cree_le: '2026-10-28T19:00:00Z'},   // après
+  ];
+  const s = syntheseMois({membres, budgets, depenses});
+  assert.equal(s.depensesDeduites, 80);
+  assert.equal(s.budgetsAVenir, 420);
+  // Solde saisi avant cette évolution (sans solde_a) : la dépense du jour n'est pas considérée comme déduite
+  assert.equal(syntheseMois({membres: [{...membres[0], solde_a: null}], budgets, depenses}).depensesDeduites, 0);
+});
+test('syntheseMois : versement déjà fait avant le solde', () => {
+  const s = syntheseMois({membres: [{membre_id: 'D', salaire: 0, solde: 1000, solde_le: '2026-11-01'}],
+    versements: [{montant: 100, dans_solde: true}, {montant: 50, dans_solde: false}]});
+  assert.equal(s.objectifs, 150);
+  assert.equal(s.objectifsAVenir, 50);
+  assert.equal(s.resteLibre, 950);
+  // Sans solde, la case est ignorée
+  assert.equal(syntheseMois({versements: [{montant: 100, dans_solde: true}]}).objectifsAVenir, 100);
+});
+test('syntheseMois : mois ouvert en avance, dépenses de fin de mois précédent faites après le solde', () => {
+  const s = syntheseMois({
+    membres: [{membre_id: 'D', salaire: 0, solde: 1800, solde_le: '2026-10-28', solde_a: '2026-10-28T18:00:00Z',
+      salaire_dans_solde: true}, {membre_id: 'A', salaire: 0, solde: null}],
+    depensesAvant: [
+      {membre_id: 'D', montant: 30, date: '2026-10-27', cree_le: '2026-10-27T10:00:00Z'},   // avant le solde
+      {membre_id: 'D', montant: 40, date: '2026-10-28', cree_le: '2026-10-28T10:00:00Z'},   // le jour, avant
+      {membre_id: 'D', montant: 50, date: '2026-10-28', cree_le: '2026-10-28T20:00:00Z'},   // le jour, après
+      {membre_id: 'D', montant: 60, date: '2026-10-30', cree_le: '2026-10-30T10:00:00Z'},   // après
+      {membre_id: 'A', montant: 70, date: '2026-10-30', cree_le: '2026-10-30T10:00:00Z'},   // A sans solde
+    ],
+  });
+  assert.equal(s.depensesDepuisSolde, 110);
+  assert.equal(s.comptes, 1690);
+  assert.equal(s.disponible, 1690);
+});

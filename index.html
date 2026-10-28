@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <!-- Seuls ce site, Supabase et Google Fonts sont autorisés : un script injecté ne pourrait ni s'exécuter ni envoyer les données ailleurs -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://npktkedhpsoidrprdhdw.supabase.co wss://npktkedhpsoidrprdhdw.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+    <meta name="referrer" content="no-referrer">
     <title>Budget familial</title>
     <meta name="theme-color" content="#E8E9E1">
     <link rel="icon" type="image/png" href="icones/favicon.png">
@@ -44,6 +47,8 @@
 
     <div id="feuilles"></div>
 
+    <!-- supabase-js 2.45.4 (build UMD du paquet npm), servi par le site lui-même : aucun code tiers chargé à l'exécution -->
+    <script src="js/vendor/supabase.js"></script>
     <script type="module" src="js/app.js"></script>
 </body>
 </html>

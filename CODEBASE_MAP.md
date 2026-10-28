@@ -7,7 +7,7 @@ Tests : `npm test` (logique pure) et `supabase/tests/rls_et_rpc.sql` (base, à l
 Guide pour Claude Code : architecture, commandes, conventions.
 
 ## index.html
-Coquille : bandeau `#mise-a-jour`, `#vue`, barre d'onglets `#onglets` (titre et entrée Rapports visibles sur ordinateur seulement), bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
+Coquille : CSP (seuls le site, Supabase et Google Fonts), `js/vendor/supabase.js` (supabase-js 2.45.4, UMD), bandeau `#mise-a-jour`, `#vue`, barre d'onglets `#onglets` (titre et entrée Rapports visibles sur ordinateur seulement), bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
 
 ## style.css
 Jetons « atelier d'ébéniste » (`:root` : lichen, noyer, chêne, mousse, miel, cèdre) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques, bandeaux.
@@ -47,7 +47,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - nbMois(debut, fin) — nombre de mois, bornes incluses
 - libelleMois(cle) — « octobre 2026 »
 - niveauBudget(budget, depense) — vide / ok / alerte / dépassé
-- syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements}) — disponible, à venir, reste libre, sans doublon
+- syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements, depensesAvant}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits, dépenses d'avant le 1er après le solde)
 - bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
 - depensesParCategorie(depenses) — total et part par membre
 - totalParMembre(depenses) — total dépensé par membre
@@ -75,9 +75,10 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - session() / surAuth(cb) — session courante, écoute de l'auth
 - connecter / inscrire / deconnecter — email et mot de passe
 - demanderReinitialisation(email) / changerMotDePasse(mdp) — mot de passe oublié
-- chargerFoyer() — foyer, membres et membre courant
+- chargerFoyer() — foyer, membres actifs, anciens membres (retirés) et membre courant
 - creerFoyer(prenom) / rejoindreFoyer(code, prenom) — RPC foyer
-- chargerMois(foyerId, cle) — mois, revenus, récurrentes, budgets, dépenses, versements
+- regenererCode() / retirerMembre(membreId) — nouveau code d'invitation, couper l'accès d'un membre
+- chargerMois(foyerId, cle) — mois, revenus, récurrentes, budgets, dépenses, versements, dépenses d'avant le 1er après un solde
 - chargerPlage(foyerId, debut, fin) — mois ouverts d'une période (+ référence), paginé
 - listerMois(foyerId) — clés des mois ouverts, décroissantes
 - chargerCategories(foyerId) — catégories actives et inactives
@@ -85,24 +86,25 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - ecouter(foyerId, cb) — abonnement Realtime aux tables publiées
 - ouvrirMois(cle, membres, revenus, versements, prelevees) — RPC d'ouverture, renvoie {mois_id, cree}
 - chargerRecurrentesModele(foyerId) — charges fixes actives du modèle
-- ajouterRecurrente / modifierRecurrente — mois et modèle (variable, payeur, déjà prélevée)
-- confirmerMontant(ligneMois, montant) — montant réel d'une charge variable
+- ajouterRecurrente / modifierRecurrente — mois et modèle (variable, payeur, déjà prélevée) ; {modele: false} : mois seul
+- confirmerMontant(ligneMois, montant, {modele}) — montant réel d'une charge variable
 - retirerDuMois / restaurerDansMois — retrait du mois seulement, annulation
 - supprimerRecurrente(ligne) — retire du mois, désactive le modèle
 - ajouterRevenu / modifierRevenu / supprimerRevenu — autres revenus du mois
 - ajouterDepense / modifierDepense / supprimerDepense — dépenses ponctuelles
-- modifierBudget(foyerId, moisId, categorieId, montant) — budget du mois et défaut
+- modifierBudget(foyerId, moisId, categorieId, montant, {modele}) — budget du mois et défaut (mois seul si modele = false)
 - creerCategorie / modifierCategorie / activerCategorie — catégories (jamais supprimées)
 - modifierProfil(membreId, {prenom, salaire_defaut, paie_mois_precedent}) — profil du membre
 - modifierMoisMembre(foyerId, moisId, membreId, champs) — part du mois d'un membre (upsert partiel)
 - creerObjectif / modifierObjectif / archiverObjectif — objectifs d'épargne
-- ajouterVersement / supprimerVersement — versements (retrait = négatif)
+- ajouterVersement / supprimerVersement — versements (retrait = négatif, dans_solde : déjà parti au solde)
 
 ## js/etat.js
 Store : état courant, notification des vues, rechargement et temps réel.
 - abonner(fn) / notifier() — abonnement des vues
 - recharger() — recharge tout, ignore les réponses périmées
 - changerMois(cle) — change le mois affiché
+- estMoisCourant() — mois affiché = mois en cours (sinon : mois passé, corrigé sans toucher au modèle)
 - rechargerEnFond() — recharge, erreur en toast
 - demarrerTempsReel() / arreterTempsReel() — Realtime avec anti-rebond 300 ms
 - surTempsReel(fn) — prévenu à chaque événement Realtime
@@ -140,7 +142,8 @@ Ouverture du mois : sa part (salaire, solde), celle de l'autre en option, revenu
 
 ## js/vues/recurrentes.js
 Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue par swipe (montant modifiable, déjà prélevée).
-- rendreRecurrentes(conteneur, {revue}) — liste groupée ou revue par swipe
+- rendreRecurrentes(conteneur, {revue}) — liste groupée (mois passé : corrections de ce mois seul) ou revue par swipe
+  (saisie gardée si le temps réel redessine, « Annuler » rétablit aussi montant et « déjà prélevée »)
 - ouvrirConfirmation(ligne) — saisir le montant d'une charge variable
 
 ## js/vues/depenses.js
@@ -161,6 +164,7 @@ Exporte `COULEURS` et `GRIS_AUTRES` (couleurs des graphiques, réutilisées par 
 - bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?, ouvrir le mois suivant en avance
 - editerMembre(membre, mm) — salaire, solde daté, déjà dans le solde
 - bilan() — bilan d'un mois passé (remplace la prévision)
+- blocFoyer() — code d'invitation (tant que le foyer attend son 2e membre), changer le code, retirer un membre
 
 ## js/vues/part-membre.js
 Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), partagée ouverture / Budget.
@@ -211,8 +215,16 @@ Publie toutes les tables partagées du foyer dans Realtime.
 ## supabase/migrations/008_paie_mois_precedent.sql
 `membres.paie_mois_precedent` : salaire du mois M versé fin M-1 (réponse d'ouverture préremplie).
 
+## supabase/migrations/009_securite.sql
+Deux membres au plus, essais de code limités (`essais_invitation`, 10 ratés/heure), `regenerer_code()`,
+`retirer_membre(p_membre)` (user_id = null, code régénéré) ; plus aucune donnée personnelle dans `creer_foyer`.
+
+## supabase/migrations/010_calculs.sql
+`mois_membres.solde_a` (moment du solde), `versements.dans_solde` ; `ouvrir_mois` date le solde à l'heure de Paris,
+ignore les membres retirés et, sur un mois déjà ouvert, garde parts, revenus et versements sans doublon.
+
 ## supabase/tests/rls_et_rpc.sql
-Test SQL (begin … rollback) : RLS, RPC, mois sautés, contraintes.
+Test SQL (begin … rollback) : RLS, RPC, mois sautés, contraintes, invitations, membre retiré.
 
 ## tests/calc.test.js
 Tests `node:test` de `js/calc.js`.

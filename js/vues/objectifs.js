@@ -1,8 +1,8 @@
 // Onglet Objectifs : épargne par objectif, versements et retraits, archives.
 import {creerObjectif, modifierObjectif, archiverObjectif, ajouterVersement, supprimerVersement} from '../db.js';
-import {etat, recharger} from '../etat.js';
+import {etat, recharger, estMoisCourant} from '../etat.js';
 import {formatEUR, libelleMois, nbMois, decalerMois, effortMensuel, cibleDepuisMensuel, suiviObjectif} from '../calc.js';
-import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
+import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
 
 const ICONES = ['🏖️', '🚗', '🏠', '🎁', '🎓', '💍', '🛟', '🎯'];
 const STATUTS = {avance: 'En avance', ajour: 'À jour', retard: 'En retard', atteint: 'Atteint', echu: 'Échu'};
@@ -242,6 +242,9 @@ function ouvrirVersement(o, sens) {
       qui = c.id;
       for (const b of segment.children) b.setAttribute('aria-pressed', String(b === e.currentTarget));
     }}, c.nom)));
+  // Avec un solde saisi ce mois-ci : le virement en est-il déjà sorti ? (sinon il serait retiré une 2e fois)
+  const avecSolde = estMoisCourant() && etat.donnees.membresMois.some((m) => m.solde != null);
+  const dejaFait = avecSolde ? caseACocher({etiquette: 'Déjà fait quand le solde a été saisi'}) : null;
   const bouton = el('button', {class: sens > 0 ? 'btn-primaire' : 'btn-danger', type: 'submit'}, sens > 0 ? 'Verser' : 'Retirer');
   let feuille;
   const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
@@ -251,7 +254,8 @@ function ouvrirVersement(o, sens) {
     bouton.disabled = true;
     try {
       await ajouterVersement(etat.foyer.id,
-        {objectif_id: o.id, mois_cle: etat.moisCourantCle, montant: sens * r.valeur, membre_id: qui});
+        {objectif_id: o.id, mois_cle: etat.moisCourantCle, montant: sens * r.valeur, membre_id: qui,
+          dans_solde: Boolean(dejaFait?.lire())});
       feuille.fermer();
       toast(sens > 0 ? `${formatEUR(r.valeur)} versés` : `${formatEUR(r.valeur)} retirés`);
       await recharger();
@@ -262,6 +266,7 @@ function ouvrirVersement(o, sens) {
   }},
   champ.element,
   el('div', {}, el('span', {class: 'etiquette'}, sens > 0 ? 'Versé par' : 'Retiré par'), segment),
+  dejaFait?.element,
   el('p', {class: 'attenue', style: {margin: 0}}, `Mois : ${libelleMois(etat.moisCourantCle)}`),
   message, bouton);
   feuille = ouvrirFeuille(form, {titre: `${sens > 0 ? 'Verser' : 'Retirer'} · ${o.nom}`});

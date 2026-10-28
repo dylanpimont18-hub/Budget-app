@@ -81,15 +81,27 @@ export function niveauBudget(budget, depense) {
 }
 
 // Le solde saisi est le point de départ : on n'ajoute ou ne retire que ce qui n'y était pas encore.
-// membres    : [{membre_id, salaire, solde, solde_le, salaire_dans_solde}]
+// membres    : [{membre_id, salaire, solde, solde_le, solde_a, salaire_dans_solde}]
 // revenus    : [{montant, dans_solde}]        recurrentes : [{montant, dans_solde}]
-// budgets    : [{categorie_id, montant}]      depenses    : [{categorie_id, membre_id, montant, date}]
-// versements : [{montant}]
-// Une dépense est déjà déduite si son payeur a saisi un solde et qu'elle date d'avant ce solde.
-// Sans aucun solde saisi, les cases « déjà passé sur le compte » des revenus et charges sont ignorées.
-export function syntheseMois({membres = [], revenus = [], recurrentes = [], budgets = [], depenses = [], versements = []}) {
+// budgets    : [{categorie_id, montant}]      depenses    : [{categorie_id, membre_id, montant, date, cree_le}]
+// versements : [{montant, dans_solde}]
+// depensesAvant : dépenses datées d'avant le 1er du mois (mois ouvert en avance), même forme que depenses.
+// Une dépense est déjà déduite si son payeur a saisi un solde et qu'elle date d'avant ce solde, ou du même jour
+// et enregistrée avant lui (solde_a). Une dépense d'avant le 1er faite après le solde en sort encore.
+// Sans aucun solde saisi, les cases « déjà passé sur le compte » des revenus, charges et versements sont ignorées.
+export function syntheseMois({membres = [], revenus = [], recurrentes = [], budgets = [], depenses = [], versements = [],
+  depensesAvant = []}) {
   const avecSolde = membres.some((m) => m.solde != null);
-  const comptes = somme(membres.map((m) => m.solde));
+  const soldes = new Map(membres.filter((m) => m.solde != null && m.solde_le).map((m) => [m.membre_id, m]));
+  const dejaDeduite = (d) => {
+    const m = soldes.get(d.membre_id);
+    if (!m) return false;
+    if (d.date !== m.solde_le) return d.date < m.solde_le;
+    return Boolean(m.solde_a && d.cree_le && new Date(d.cree_le) <= new Date(m.solde_a));
+  };
+  const depensesDepuisSolde = somme(depensesAvant.filter((d) => soldes.has(d.membre_id) && !dejaDeduite(d))
+    .map((d) => d.montant));
+  const comptes = arrondi(somme(membres.map((m) => m.solde)) - depensesDepuisSolde);
 
   const salaireAVenir = (m) => (m.salaire_dans_solde && m.solde != null ? 0 : Number(m.salaire) || 0);
   const salaires = somme(membres.map((m) => m.salaire));
@@ -101,8 +113,6 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
   const chargesAPrelever = somme(recurrentes.filter((r) => !(avecSolde && r.dans_solde)).map((r) => r.montant));
 
   // Par catégorie : on prévoit le plus grand du budget et du dépensé, moins ce qui est déjà sorti du compte
-  const dateSolde = new Map(membres.filter((m) => m.solde != null && m.solde_le).map((m) => [m.membre_id, m.solde_le]));
-  const dejaDeduite = (d) => dateSolde.has(d.membre_id) && d.date < dateSolde.get(d.membre_id);
   const parCategorie = new Map();
   const ligne = (id) => parCategorie.get(id) ?? parCategorie.set(id, {budget: 0, depense: 0, deduit: 0}).get(id);
   for (const b of budgets) ligne(b.categorie_id).budget += Number(b.montant) || 0;
@@ -118,13 +128,14 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
   const budgetsAVenir = arrondi(budgetsPrevus - depensesDeduites);
 
   const objectifs = somme(versements.map((v) => v.montant));
+  const objectifsAVenir = somme(versements.filter((v) => !(avecSolde && v.dans_solde)).map((v) => v.montant));
   const disponible = arrondi(comptes + salairesARecevoir + revenusARecevoir);
-  const resteLibre = arrondi(disponible - chargesAPrelever - budgetsAVenir - objectifs);
+  const resteLibre = arrondi(disponible - chargesAPrelever - budgetsAVenir - objectifsAVenir);
   return {
-    comptes, salaires, salairesARecevoir, autresRevenus, revenusARecevoir, disponible,
+    comptes, depensesDepuisSolde, salaires, salairesARecevoir, autresRevenus, revenusARecevoir, disponible,
     chargesFixes, chargesAPrelever,
     budgets: budgetsTotal, budgetsPrevus, depensesDeduites, budgetsAVenir,
-    objectifs, resteLibre,
+    objectifs, objectifsAVenir, resteLibre,
     pctResteLibre: disponible > 0 ? arrondi((resteLibre / disponible) * 100) : null,
   };
 }

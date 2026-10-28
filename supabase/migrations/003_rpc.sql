@@ -6,11 +6,8 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select case
-    when trim(p_prenom) ilike 'dylan' then 0
-    when trim(p_prenom) ilike 'amel' then 0
-    else 0
-  end;
+  -- Montants personnels retirés du dépôt (public) : voir 009_securite.sql
+  select 0::numeric;
 $$;
 
 create or replace function public.creer_foyer(p_prenom text)
@@ -47,9 +44,9 @@ begin
   values (v_foyer.id, v_uid, trim(p_prenom), public.salaire_initial(p_prenom));
 
   insert into public.categories (foyer_id, nom, icone, budget_defaut, ordre) values
-    (v_foyer.id, 'Courses',                '🛒', 0, 1),
-    (v_foyer.id, 'Transport & carburant',  '⛽', 0, 2),
-    (v_foyer.id, 'Loisirs & sorties',      '🎉', 0, 3),
+    (v_foyer.id, 'Courses',                '🛒', 0,   1),
+    (v_foyer.id, 'Transport & carburant',  '⛽', 0,   2),
+    (v_foyer.id, 'Loisirs & sorties',      '🎉', 0,   3),
     (v_foyer.id, 'Vêtements des enfants',  '👕', 0,   4),
     (v_foyer.id, 'Activités des enfants',  '⚽', 0,   5),
     (v_foyer.id, 'Santé',                  '💊', 0,   6),
@@ -58,16 +55,7 @@ begin
     (v_foyer.id, 'Cadeaux & fêtes',        '🎁', 0,   9),
     (v_foyer.id, 'Divers & imprévus',      '📦', 0,  10);
 
-  insert into public.recurrentes (foyer_id, libelle, icone, montant, ordre) values
-    (v_foyer.id, 'Prêt immobilier',                        '🏡', 0.00, 1),
-    (v_foyer.id, 'Prêt à taux zéro',                       '🏦',  0.00, 2),
-    (v_foyer.id, 'Charges & énergie',                      '⚡', 0.00, 3),
-    (v_foyer.id, 'Eau / assainissement',                   '💧',  0.00, 4),
-    (v_foyer.id, 'Assurances',                             '🛡️',  0.00, 5),
-    (v_foyer.id, 'Abonnements (box, mobiles, streaming)',  '📱',  0.00, 6),
-    (v_foyer.id, 'Garde des enfants (Pajemploi)',          '👶', 0.00, 7),
-    (v_foyer.id, 'Cantine / périscolaire',                 '🍽️',  0.00, 8),
-    (v_foyer.id, 'Impôts',                                 '🧾', 0.00, 9);
+  -- Charges du foyer d'origine retirées du dépôt (public) : un nouveau foyer part sans charges (009_securite.sql)
 
   return v_foyer;
 end;

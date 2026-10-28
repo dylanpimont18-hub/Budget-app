@@ -2,7 +2,7 @@
 // et revue de début de mois par swipe, où l'on saisit aussi le montant des charges variables.
 import {ajouterRecurrente, modifierRecurrente, confirmerMontant, retirerDuMois, restaurerDansMois, supprimerRecurrente}
   from '../db.js';
-import {etat, recharger} from '../etat.js';
+import {etat, recharger, estMoisCourant} from '../etat.js';
 import {formatEUR, libelleMois} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
 
@@ -12,8 +12,7 @@ const SEUIL_SWIPE = 100;
 // Session de revue, conservée entre deux rendus (le temps réel re-rend l'onglet)
 let revue = null;
 
-const enLectureSeule = () => etat.moisCle !== etat.moisCourantCle;
-const prenomDe = (id) => etat.membres.find((m) => m.id === id)?.prenom;
+const prenomDe = (id) => (etat.membres.find((m) => m.id === id) ?? etat.anciensMembres.find((m) => m.id === id))?.prenom;
 
 export function rendreRecurrentes(conteneur, {revue: demarrerRevue = false} = {}) {
   const donnees = etat.donnees;
@@ -21,8 +20,8 @@ export function rendreRecurrentes(conteneur, {revue: demarrerRevue = false} = {}
     conteneur.append(el('h1', {}, 'Récurrentes'), el('p', {class: 'vide-liste'}, 'Ce mois n\'a pas été ouvert.'));
     return;
   }
-  if (demarrerRevue && !enLectureSeule()) commencerRevue();
-  if (revue && (revue.moisId !== donnees.mois.id || enLectureSeule())) revue = null;
+  if (demarrerRevue && estMoisCourant()) commencerRevue();
+  if (revue && (revue.moisId !== donnees.mois.id || !estMoisCourant())) revue = null;
 
   if (revue) rendreRevue(conteneur);
   else rendreListe(conteneur);
@@ -39,11 +38,11 @@ const boutonAjout = (visible) => {
 function rendreListe(conteneur) {
   boutonAjout(true);
   const {recurrentes} = etat.donnees;
-  const lectureSeule = enLectureSeule();
+  const moisPasse = !estMoisCourant();
   const total = recurrentes.reduce((t, r) => t + Number(r.montant), 0);
 
   // Communes d'abord, puis les charges personnelles de chacun
-  const groupes = [{titre: 'Communes', lignes: recurrentes.filter((r) => !prenomDe(r.membre_id))},
+  const groupes = [{titre: 'Communes', lignes: recurrentes.filter((r) => !etat.membres.some((m) => m.id === r.membre_id))},
     ...etat.membres.map((m) => ({titre: `Perso · ${m.prenom}`, lignes: recurrentes.filter((r) => r.membre_id === m.id)}))]
     .filter((g) => g.lignes.length);
 
@@ -53,8 +52,7 @@ function rendreListe(conteneur) {
     else if (r.dans_solde) sous = 'Déjà prélevée';
     else if (r.variable) sous = 'Montant variable';
     return el('li', {},
-      el(lectureSeule ? 'div' : 'button', {class: 'ligne', type: lectureSeule ? null : 'button',
-        onclick: lectureSeule ? null : () => (r.a_confirmer ? ouvrirConfirmation(r) : ouvrirEdition(r))},
+      el('button', {class: 'ligne', type: 'button', onclick: () => (r.a_confirmer ? ouvrirConfirmation(r) : ouvrirEdition(r))},
         el('span', {class: 'ligne-icone', 'aria-hidden': 'true'}, r.icone ?? '📌'),
         el('span', {class: 'ligne-texte'}, el('div', {class: 'ligne-titre'}, r.libelle),
           sous ? el('div', {class: 'ligne-sous'}, sous) : null),
@@ -65,16 +63,17 @@ function rendreListe(conteneur) {
     el('div', {class: 'entete-vue'},
       el('h1', {}, 'Récurrentes'),
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
-    el('p', {class: 'attenue'}, `Charges fixes · ${libelleMois(etat.moisCle)}`, lectureSeule ? ' · lecture seule' : ''),
+    el('p', {class: 'attenue'}, `Charges fixes · ${libelleMois(etat.moisCle)}`,
+      moisPasse ? ' · mois passé : tes corrections ne changent que ce mois' : ''),
     groupes.length
       ? el('div', {class: 'grille-ordinateur'}, groupes.map((g) => el('section', {},
           el('div', {class: 'titre-groupe'}, el('span', {}, g.titre),
             el('span', {class: 'montant'}, formatEUR(g.lignes.reduce((t, r) => t + Number(r.montant), 0)))),
           el('ul', {class: 'liste'}, g.lignes.map(ligne)))))
       : el('p', {class: 'vide-liste'}, 'Aucune charge fixe ce mois-ci.'),
-    lectureSeule ? null : el('div', {class: 'actions'},
+    el('div', {class: 'actions'},
       el('button', {class: 'btn-secondaire', type: 'button', onclick: () => ouvrirEdition(null)}, '+ Ajouter une charge'),
-      recurrentes.length
+      recurrentes.length && !moisPasse
         ? el('button', {class: 'btn-texte', type: 'button', onclick: () => {
             commencerRevue();
             conteneur.replaceChildren();
@@ -96,7 +95,7 @@ export function ouvrirConfirmation(ligne) {
     if (!r.ok) return;
     bouton.disabled = true;
     try {
-      await confirmerMontant(ligne, r.valeur);
+      await confirmerMontant(ligne, r.valeur, {modele: estMoisCourant()});
       feuille.fermer();
       toast('Montant enregistré');
       await recharger();
@@ -106,7 +105,8 @@ export function ouvrirConfirmation(ligne) {
     }
   }},
   champ.element,
-  el('p', {class: 'attenue', style: {margin: 0}}, 'Prérempli avec le dernier montant saisi.'),
+  el('p', {class: 'attenue', style: {margin: 0}}, estMoisCourant()
+    ? 'Prérempli avec le dernier montant saisi.' : 'Mois passé : le montant proposé les mois suivants ne change pas.'),
   message, bouton,
   el('button', {class: 'btn-texte', type: 'button', onclick: () => { feuille.fermer(); ouvrirEdition(ligne); }},
     'Modifier la charge'));
@@ -159,8 +159,9 @@ function ouvrirEdition(ligne) {
     if (!m.ok) return;
     const champs = {libelle: libelle.value.trim(), icone, montant: m.valeur, variable: variable.lire(), membre_id: payeur,
       dans_solde: prelevee.lire()};
+    const options = {modele: estMoisCourant()};
     executer(enregistrer,
-      () => (ligne ? modifierRecurrente(ligne, champs) : ajouterRecurrente(etat.foyer.id, etat.donnees.mois.id, champs)),
+      () => (ligne ? modifierRecurrente(ligne, champs, options) : ajouterRecurrente(etat.foyer.id, etat.donnees.mois.id, champs, options)),
       ligne ? 'Charge modifiée' : 'Charge ajoutée');
   }},
   el('div', {}, el('label', {class: 'etiquette', for: 'recurrente-libelle'}, 'Libellé'), libelle),
@@ -181,7 +182,8 @@ function ouvrirEdition(ligne) {
   const actions = ligne ? el('div', {class: 'actions'},
     el('button', {class: 'btn-secondaire', type: 'button', onclick: (e) =>
       executer(e.currentTarget, () => retirerDuMois(ligne.id), 'Retirée de ce mois')}, 'Retirer de ce mois seulement'),
-    el('button', {class: 'btn-danger', type: 'button', onclick: (e) => {
+    // Mois passé : la charge ne disparaît pas des mois suivants
+    !estMoisCourant() ? null : el('button', {class: 'btn-danger', type: 'button', onclick: (e) => {
       if (!confirm(`Supprimer « ${ligne.libelle} » de ce mois et des mois suivants ?`)) return;
       executer(e.currentTarget, () => supprimerRecurrente(ligne), 'Charge supprimée');
     }}, 'Supprimer la charge')) : null;
@@ -197,7 +199,8 @@ function commencerRevue() {
     moisId: etat.donnees.mois.id,
     lignes: [...etat.donnees.recurrentes],
     index: 0,
-    historique: [],   // {action: 'garder'|'retirer', ligne}
+    historique: [],   // {action: 'garder'|'retirer', ligne (telle qu'avant la revue), modifiee}
+    brouillon: null,  // saisie en cours sur la carte affichée, gardée si le temps réel la redessine
     occupe: false,
   };
 }
@@ -230,7 +233,10 @@ function rendreRevue(conteneur) {
     valeur: ligne.montant, grand: true});
   const blocMontant = el('div', {hidden: !ligne.variable}, champ.element,
     ligne.variable ? null : el('p', {class: 'attenue', style: {margin: 0}}, 'Vaut aussi pour les mois suivants.'));
+  if (revue.brouillon?.index !== revue.index) revue.brouillon = {index: revue.index};
+  const brouillon = revue.brouillon;
   const btnModifier = ligne.variable ? null : el('button', {class: 'btn-texte', type: 'button', onclick: () => {
+    brouillon.montantOuvert = true;
     blocMontant.hidden = false;
     btnModifier.hidden = true;
     champ.input.focus();
@@ -239,8 +245,16 @@ function rendreRevue(conteneur) {
   // Avec un solde saisi, on note si la charge en est déjà sortie (pour ne pas la retirer deux fois)
   const avecSolde = etat.donnees.membresMois.some((m) => m.solde != null);
   const prelevee = avecSolde
-    ? caseACocher({etiquette: 'Déjà prélevée (comprise dans le solde)', valeur: Boolean(ligne.dans_solde)})
+    ? caseACocher({etiquette: 'Déjà prélevée (comprise dans le solde)', valeur: brouillon.prelevee ?? Boolean(ligne.dans_solde),
+        surChange: (coche) => { brouillon.prelevee = coche; }})
     : null;
+  // Reprise de la saisie en cours (la carte a été redessinée par le temps réel)
+  if (brouillon.montant != null) champ.input.value = brouillon.montant;
+  champ.input.addEventListener('input', () => { brouillon.montant = champ.input.value; });
+  if (brouillon.montantOuvert) {
+    blocMontant.hidden = false;
+    btnModifier.hidden = true;
+  }
 
   const decider = async (action) => {
     if (revue.occupe) return;
@@ -263,7 +277,7 @@ function rendreRevue(conteneur) {
         await modifierRecurrente(ligne, {libelle: ligne.libelle, icone: ligne.icone, montant: montant ?? ligne.montant,
           variable: ligne.variable, membre_id: ligne.membre_id, dans_solde: dansSolde});
       }
-      revue.historique.push({action, ligne});
+      revue.historique.push({action, ligne, modifiee: aEnregistrer});
       revue.index += 1;
     } catch (e) {
       toast(e.message, {type: 'erreur'});
@@ -282,7 +296,13 @@ function rendreRevue(conteneur) {
     revue.occupe = true;
     const dernier = revue.historique.at(-1);
     try {
-      if (dernier.action === 'retirer') await restaurerDansMois(etat.foyer.id, revue.moisId, dernier.ligne);
+      const l = dernier.ligne;
+      if (dernier.action === 'retirer') await restaurerDansMois(etat.foyer.id, revue.moisId, l);
+      // Montant ou « déjà prélevée » changés : le mois et le modèle reprennent leurs valeurs d'avant
+      if (dernier.modifiee) {
+        await modifierRecurrente(l, {libelle: l.libelle, icone: l.icone, montant: l.montant, variable: l.variable,
+          membre_id: l.membre_id, dans_solde: Boolean(l.dans_solde), a_confirmer: Boolean(l.a_confirmer)});
+      }
       revue.historique.pop();
       revue.index -= 1;
     } catch (e) {

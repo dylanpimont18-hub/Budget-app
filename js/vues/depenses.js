@@ -25,7 +25,7 @@ export function categorieDe(id) {
 }
 
 function membreDe(id) {
-  return etat.membres.find((m) => m.id === id);
+  return etat.membres.find((m) => m.id === id) ?? etat.anciensMembres.find((m) => m.id === id);
 }
 
 function lireDernierPayeur() {

@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Budget familial** is a French-language PWA for a couple's monthly budget, shared in real time. Static front end
 (native ES modules, no build, no npm dependencies) served by GitHub Pages through `.github/workflows/pages.yml`
 (tests, then publish on every push to `main`; the commit SHA is written into `js/version.js` and `version.json`); data in Supabase (Auth email/password,
-Postgres with row-level security per household, Realtime). `supabase-js` is loaded from jsDelivr at a pinned version.
+Postgres with row-level security per household, Realtime). `supabase-js` 2.45.4 is vendored in `js/vendor/supabase.js` (UMD build from npm, global `supabase`) and the page has a
+strict Content-Security-Policy in `index.html`: no third-party script at runtime.
 
 Start with `CODEBASE_MAP.md`: it lists every file and its main functions. Spec and plan live in `docs/superpowers/`.
 
@@ -46,11 +47,16 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
 - Desktop is `@media (min-width: 1024px)` only (same threshold as `estOrdinateur()` in `ui.js`): side menu, centred
   sheets, `.grille-ordinateur` two columns. Below it the phone layout must stay pixel-identical. The Rapports tab
   exists only on desktop; the app falls back to Budget below 1024 px (but not while printing).
-- Only the public (anon) Supabase key may appear in code; never a service key.
+- Only the public (anon) Supabase key may appear in code; never a service key. The repository is public: no personal
+  data (salaries, loans, real charges) in code, migrations or tests.
+- A household has at most two active members; a removed member keeps `membres` row with `user_id = null`
+  (`etat.anciensMembres`). A past month can be corrected, but only the current month updates the templates.
 - Nothing is counted twice (`syntheseMois` in `calc.js`): each member's balance (`solde`, dated `solde_le`) is the
   starting point; add only what is not in it yet (salary unless `salaire_dans_solde`, other income unless
   `revenus_mois.dans_solde`), subtract only what has not left yet (charges unless `recurrentes_mois.dans_solde`,
-  max(budget, spent) minus the payer's expenses dated before `solde_le`, goal transfers). `salaire_recu` is display only.
+  max(budget, spent) minus the payer's expenses already in the balance — dated before `solde_le`, or that day and created
+  before `solde_a` —, goal transfers unless `versements.dans_solde`; a month opened early also loses the expenses made
+  between the balance and the 1st). `salaire_recu` is display only.
 - Recurring charges can be personal (`membre_id`, null = shared) and variable (`variable`: each new month copies the
   last amount with `a_confirmer = true` until it is entered).
 - Each member fills in their own part of the month (`mois_membres.renseigne`), or the other can fill it in for them

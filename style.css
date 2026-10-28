@@ -342,6 +342,7 @@ button.ligne:active { background: var(--sable); }
     font-weight: 600;
 }
 .btn-texte:disabled { opacity: 0.4; }
+.btn-texte.texte-danger { color: var(--rouge-t); }
 
 .btn-icone {
     display: inline-flex;

@@ -62,9 +62,12 @@ function rendreOngletActif(options) {
   const curseur = focus?.selectionStart != null ? [focus.selectionStart, focus.selectionEnd] : null;
   vue.replaceChildren();
   rendus[ongletActif]?.(vue, options);
-  if (focus && focus !== document.body && vue.contains(focus) && document.activeElement !== focus) {
-    focus.focus({preventScroll: true});
-    if (curseur) focus.setSelectionRange?.(...curseur);
+  if (!focus || focus === document.body || document.activeElement === focus) return;
+  // Champ reconstruit (revue des charges) : on retrouve son remplaçant par son identifiant
+  const cible = vue.contains(focus) ? focus : (focus.id ? vue.querySelector(`#${CSS.escape(focus.id)}`) : null);
+  if (cible) {
+    cible.focus({preventScroll: true});
+    if (curseur) cible.setSelectionRange?.(...curseur);
   }
 }
 
@@ -135,7 +138,7 @@ async function lancer() {
       return;
     }
     if (!etat.session) {
-      Object.assign(etat, {foyer: null, membres: [], moi: null, donnees: null});
+      Object.assign(etat, {foyer: null, membres: [], anciensMembres: [], moi: null, donnees: null});
       afficherEcran((c) => rendreConnexion(c, {apres: demarrer}));
       return;
     }

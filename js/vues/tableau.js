@@ -1,7 +1,7 @@
 // Onglet Budget (tableau de bord) : prévision du mois, budgets par catégorie, par personne, graphiques.
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
-import {modifierBudget, modifierMoisMembre} from '../db.js';
-import {etat, recharger} from '../etat.js';
+import {modifierBudget, modifierMoisMembre, regenererCode, retirerMembre} from '../db.js';
+import {etat, recharger, estMoisCourant} from '../etat.js';
 import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
 import {selecteurMois, aujourdhui, categorieDe} from './depenses.js';
@@ -24,7 +24,6 @@ const libelleDate = (iso) => {
   const [a, m, j] = iso.split('-').map(Number);
   return formatJourCourt.format(new Date(a, m - 1, j));
 };
-const estMoisCourant = () => etat.moisCle === etat.moisCourantCle;
 
 export function rendreTableau(conteneur) {
   const d = etat.donnees;
@@ -42,6 +41,7 @@ export function rendreTableau(conteneur) {
     budgets: d.budgets,
     depenses: d.depenses,
     versements: d.versements,
+    depensesAvant: d.depensesAvant,
   });
 
   // Mois passé : la prévision n'a plus de sens, on montre le bilan
@@ -154,6 +154,10 @@ function cartes(s) {
     el('div', {class: 'etiquette-stat'}, 'Disponible'),
     el('div', {class: 'valeur-stat montant'}, formatEUR(s.disponible)),
     detail('Sur les comptes', s.comptes),
+    // Mois ouvert en avance : ce qui a été dépensé entre le solde et le 1er est déjà retiré des comptes
+    s.depensesDepuisSolde > 0
+      ? el('div', {class: 'sous-stat'}, `soldes moins ${formatEUR(s.depensesDepuisSolde)} dépensés depuis, avant le 1er`)
+      : null,
     detail('Salaires à recevoir', s.salairesARecevoir),
     detail('Autres revenus à recevoir', s.revenusARecevoir),
     modifiable ? el('div', {class: 'sous-stat lien-stat'}, 'Gérer les autres revenus ›') : null,
@@ -177,7 +181,8 @@ function cartes(s) {
       : el('div', {class: 'carte-stat large'}, disponible),
     carte('Charges à prélever', s.chargesAPrelever, sousCharges),
     carte('Budgets à venir', s.budgetsAVenir, sousBudgets),
-    carte('Objectifs', s.objectifs, [sousPct(s.objectifs)]));
+    carte('Objectifs', s.objectifsAVenir, s.objectifsAVenir !== s.objectifs
+      ? [`sur ${formatEUR(s.objectifs)}, le reste déjà viré`] : [sousPct(s.objectifsAVenir)]));
 }
 
 // ── Bilan d'un mois passé ──────────────────────────────────────────────
@@ -207,7 +212,7 @@ function bilan() {
 
 function categories() {
   const d = etat.donnees;
-  const modifiable = estMoisCourant();
+  const courant = estMoisCourant();   // mois passé : budgets corrigeables, catégories gérées depuis le mois en cours
   const depenses = depensesParCategorie(d.depenses);
   const budgetDe = (id) => Number(d.budgets.find((b) => b.categorie_id === id)?.montant ?? 0);
 
@@ -229,7 +234,7 @@ function categories() {
       el('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}},
         el('span', {'aria-hidden': 'true'}, c.icone ?? '•'),
         el('span', {class: 'ligne-texte ligne-titre'}, c.nom),
-        modifiable && c.active
+        c.active || !courant
           ? el('button', {class: 'btn-texte montant', type: 'button', style: {padding: '4px 6px'},
               'aria-label': `Modifier le budget ${c.nom} (${formatEUR(budget)})`, onclick: () => editerBudget(c, budget)},
             libelleBudget)
@@ -249,7 +254,7 @@ function categories() {
           el('summary', {}, `Catégories sans budget (${aZero.length})`),
           el('ul', {class: 'liste'}, aZero.map(ligne)))
       : null,
-    modifiable ? el('button', {class: 'btn-texte', type: 'button', onclick: ouvrirCategories}, 'Gérer les catégories') : null);
+    courant ? el('button', {class: 'btn-texte', type: 'button', onclick: ouvrirCategories}, 'Gérer les catégories') : null);
 }
 
 function editerBudget(categorie, actuel) {
@@ -263,7 +268,7 @@ function editerBudget(categorie, actuel) {
     if (!r.ok) return;
     bouton.disabled = true;
     try {
-      await modifierBudget(etat.foyer.id, etat.donnees.mois.id, categorie.id, r.valeur);
+      await modifierBudget(etat.foyer.id, etat.donnees.mois.id, categorie.id, r.valeur, {modele: estMoisCourant()});
       feuille.fermer();
       toast('Budget modifié');
       await recharger();
@@ -273,7 +278,8 @@ function editerBudget(categorie, actuel) {
     }
   }},
   champ.element,
-  el('p', {class: 'attenue', style: {margin: 0}}, 'S\'applique à ce mois et aux mois suivants.'),
+  el('p', {class: 'attenue', style: {margin: 0}}, estMoisCourant()
+    ? 'S\'applique à ce mois et aux mois suivants.' : 'Mois passé : seul ce mois est corrigé.'),
   message, bouton);
   feuille = ouvrirFeuille(form, {titre: 'Modifier le budget'});
   champ.input.focus();
@@ -283,7 +289,6 @@ function editerBudget(categorie, actuel) {
 
 function blocMembres() {
   const d = etat.donnees;
-  const modifiable = estMoisCourant();
   const depenses = totalParMembre(d.depenses);
   return el('div', {class: 'grille-stats'}, etat.membres.map((m) => {
     const mm = d.membresMois.find((x) => x.membre_id === m.id);
@@ -304,10 +309,9 @@ function blocMembres() {
       el('div', {class: 'sous-stat'}, 'dépensé ce mois'),
       infos,
     ];
-    return modifiable
-      ? el('button', {class: 'carte-stat', type: 'button', style: {textAlign: 'left', font: 'inherit'},
-          'aria-label': `Modifier salaire et solde de ${m.prenom}`, onclick: () => editerMembre(m, mm)}, contenu)
-      : el('div', {class: 'carte-stat'}, contenu);
+    // Modifiable aussi dans un mois passé (correction)
+    return el('button', {class: 'carte-stat', type: 'button', style: {textAlign: 'left', font: 'inherit'},
+      'aria-label': `Modifier salaire et solde de ${m.prenom}`, onclick: () => editerMembre(m, mm)}, contenu);
   }));
 }
 
@@ -325,15 +329,16 @@ function editerMembre(membre, mm) {
     const r = part.valider();
     if (!r.ok) return;
     const {salaire, solde, salaire_dans_solde: oui} = r.valeurs;
-    // Nouveau solde : sa date change, les dépenses d'avant y sont considérées comme déduites
+    // Nouveau solde : sa date et son heure changent ; les dépenses enregistrées avant y sont considérées comme déduites
     const soldeChange = premiereFois || solde !== (mm?.solde == null ? null : Number(mm.solde));
     const soldeLe = solde == null ? null : (soldeChange ? aujourdhui() : mm.solde_le);
+    const soldeA = solde == null ? null : (soldeChange ? new Date().toISOString() : mm.solde_a);
     // Déjà dans le solde ⇒ reçu ; si l'on revient sur un « oui », le salaire redevient à confirmer
     const recu = oui || (mm?.salaire_dans_solde ? false : Boolean(mm?.salaire_recu));
     bouton.disabled = true;
     try {
       await modifierMoisMembre(etat.foyer.id, etat.donnees.mois.id, membre.id, {salaire, solde,
-        solde_le: soldeLe, salaire_dans_solde: oui, salaire_recu: recu, renseigne: true});
+        solde_le: soldeLe, solde_a: soldeA, salaire_dans_solde: oui, salaire_recu: recu, renseigne: true});
       feuille.fermer();
       toast('Enregistré');
       await recharger();
@@ -344,7 +349,7 @@ function editerMembre(membre, mm) {
   }},
   part.element,
   premiereFois ? null : el('p', {class: 'attenue', style: {margin: 0}},
-    'Nouveau solde ? Les dépenses d\'avant aujourd\'hui y sont déjà déduites. '
+    'Nouveau solde ? Les dépenses déjà enregistrées y sont considérées comme déduites. '
     + 'Coche ensuite dans Récurrentes les charges déjà prélevées.'),
   message, bouton);
   feuille = ouvrirFeuille(form, {titre: membre.prenom});
@@ -354,11 +359,14 @@ function editerMembre(membre, mm) {
 
 function graphiques(s, {prevision}) {
   const d = etat.donnees;
+  // Par catégorie, le plus grand du budget et du dépensé (comme « Budgets à venir ») : un dépassement se voit
+  const depenses = depensesParCategorie(d.depenses);
+  const ids = new Set([...d.budgets.map((b) => b.categorie_id), ...depenses.keys()]);
   const postes = topPostes([
     ...d.recurrentes.map((r) => ({nom: r.libelle, montant: Number(r.montant)})),
-    ...d.budgets.map((b) => ({
-      nom: d.categories.find((c) => c.id === b.categorie_id)?.nom ?? 'Catégorie',
-      montant: Number(b.montant),
+    ...[...ids].map((id) => ({
+      nom: categorieDe(id).nom,
+      montant: Math.max(Number(d.budgets.find((b) => b.categorie_id === id)?.montant ?? 0), depenses.get(id)?.total ?? 0),
     })),
   ]);
   const totalPostes = postes.reduce((t, p) => t + p.montant, 0);
@@ -367,7 +375,7 @@ function graphiques(s, {prevision}) {
   const segments = [
     {nom: 'Charges à prélever', montant: s.chargesAPrelever, couleur: COULEURS[0]},
     {nom: 'Budgets à venir', montant: s.budgetsAVenir, couleur: COULEURS[2]},
-    {nom: 'Objectifs', montant: Math.max(0, s.objectifs), couleur: COULEURS[1]},
+    {nom: 'Objectifs', montant: Math.max(0, s.objectifsAVenir), couleur: COULEURS[1]},
     {nom: 'Reste libre', montant: Math.max(0, s.resteLibre), couleur: COULEURS[4]},
   ];
   const totalBarre = segments.reduce((t, x) => t + x.montant, 0);
@@ -419,14 +427,45 @@ function anneau(parts, description) {
 
 // ── Pied de page ───────────────────────────────────────────────────────
 
-function piedDePage() {
+// Action sur le foyer (code, membre) : le foyer est rechargé ensuite pour afficher le nouveau code
+async function actionFoyer(bouton, action, succes) {
+  bouton.disabled = true;
+  try {
+    await action();
+    toast(succes);
+    await recharger();
+  } catch (err) {
+    toast(err.message, {type: 'erreur'});
+    bouton.disabled = false;
+  }
+}
+
+// Le code n'est montré que tant que le foyer attend son 2e membre ; on peut le changer s'il a circulé
+function blocFoyer() {
   const code = etat.foyer?.code_invitation ?? '';
+  const autres = etat.membres.filter((m) => m.id !== etat.moi.id);
+  const changerCode = el('button', {class: 'btn-texte', type: 'button', onclick: (e) =>
+    actionFoyer(e.currentTarget, regenererCode, 'Nouveau code créé : l\'ancien ne marche plus')}, 'Changer le code');
+  return [
+    autres.length
+      ? el('div', {class: 'attenue'}, `Foyer complet : toi et ${autres.map((m) => m.prenom).join(', ')}`)
+      : el('div', {style: {display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px'}},
+          el('div', {},
+            el('div', {class: 'attenue'}, 'Code d\'invitation du foyer'),
+            el('strong', {style: {letterSpacing: '0.15em', fontSize: '1.2rem'}}, code)),
+          el('button', {class: 'btn-texte', type: 'button', onclick: () => copier(code)}, 'Copier')),
+    el('div', {style: {display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '8px'}},
+      autres.length ? null : changerCode,
+      autres.map((m) => el('button', {class: 'btn-texte texte-danger', type: 'button', onclick: (e) => {
+        if (!confirm(`Retirer ${m.prenom} du foyer ? ${m.prenom} n'aura plus accès au budget ; ses dépenses passées restent.`)) return;
+        actionFoyer(e.currentTarget, () => retirerMembre(m.id), `${m.prenom} n'a plus accès au foyer`);
+      }}, `Retirer ${m.prenom} du foyer`))),
+  ];
+}
+
+function piedDePage() {
   return el('div', {class: 'carte', style: {marginTop: '16px'}},
-    el('div', {style: {display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px'}},
-      el('div', {},
-        el('div', {class: 'attenue'}, 'Code d\'invitation du foyer'),
-        el('strong', {style: {letterSpacing: '0.15em', fontSize: '1.2rem'}}, code)),
-      el('button', {class: 'btn-texte', type: 'button', onclick: () => copier(code)}, 'Copier')),
+    blocFoyer(),
     el('div', {style: {display: 'flex', justifyContent: 'space-between', gap: '8px'}},
       el('button', {class: 'btn-texte', type: 'button', onclick: ouvrirProfil, style: {paddingLeft: 0}}, 'Mon profil'),
       el('button', {class: 'btn-texte', type: 'button', onclick: seDeconnecter}, 'Se déconnecter')),

@@ -6,6 +6,7 @@ export const etat = {
   session: null,
   foyer: null,
   membres: [],
+  anciensMembres: [],   // retirés du foyer (prénom des dépenses passées)
   moi: null,
   moisCle: null,          // mois affiché
   moisCourantCle: null,   // mois calendaire
@@ -48,6 +49,9 @@ export async function recharger() {
   };
   notifier();
 }
+
+// Mois en cours : ses modifications valent aussi pour les mois suivants (modèle). Un mois passé se corrige seul.
+export const estMoisCourant = () => etat.moisCle === etat.moisCourantCle;
 
 export async function changerMois(cle) {
   etat.moisCle = cle;
