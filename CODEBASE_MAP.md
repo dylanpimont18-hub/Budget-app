@@ -50,6 +50,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - statutRecurrente(r) / etatRecurrentes(recurrentes) — charge déjà prélevée, à prélever ou à confirmer ; totaux par statut
 - resumeBudgets(lignes) — prévu, dépensé, reste, niveau global et nombre de catégories par niveau
 - syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements, depensesAvant}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits, dépenses d'avant le 1er après le solde)
+- colonnesMembres({membres, ids, recurrentes, depenses, versements, depensesAvant}) — reste de chacun : solde, salaire à venir, part des communes (compte joint), charges perso, dépenses payées, objectifs
 - bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
 - depensesParCategorie(depenses) — total et part par membre
 - totalParMembre(depenses) — total dépensé par membre
@@ -62,6 +63,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - epargneParMois(versements, objectifs, cles) — versé et prévu au départ
 - progressionObjectif(objectif, versements, cles, moisCourant) — versé et % par mois, baisses
 - raisonsBaisse(courant, precedent, categories, membres) — 3 écarts défavorables en clair
+- faisabiliteObjectif(objectif, projection, resteLibre) — réalisable / serré / difficile d'après le rythme et le reste libre
 - projectionObjectif(objectif, versements, moisCourant) — rythme des 3 derniers mois, atteinte
 
 ## js/rapport.js

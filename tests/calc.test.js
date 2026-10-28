@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseMontant, formatEUR, cleMois, decalerMois, nbMois, moisActif, peutOuvrirEnAvance, libelleMois, niveauBudget,
-  statutRecurrente, etatRecurrentes, resumeBudgets,
+  statutRecurrente, etatRecurrentes, resumeBudgets, colonnesMembres, faisabiliteObjectif,
   syntheseMois, bilanMois, depensesParCategorie, totalParMembre, topPostes,
   effortMensuel, cibleDepuisMensuel, suiviObjectif, de,
   evolutionCategories, entreesSorties, epargneParMois, progressionObjectif, raisonsBaisse, projectionObjectif,
@@ -374,4 +374,52 @@ test('syntheseMois : mois ouvert en avance, dépenses de fin de mois précédent
   assert.equal(s.depensesDepuisSolde, 110);
   assert.equal(s.comptes, 1690);
   assert.equal(s.disponible, 1690);
+});
+
+test('colonnesMembres : communes partagées, perso et dépenses au payeur, rien de déjà dans le solde', () => {
+  const [a, b] = colonnesMembres({
+    ids: ['a', 'b'],
+    membres: [
+      {membre_id: 'a', renseigne: true, solde: 2500, solde_le: '2026-10-28', salaire: 2000, salaire_dans_solde: true},
+      {membre_id: 'b', renseigne: true, solde: 400, solde_le: '2026-10-28', salaire: 1800, salaire_dans_solde: false},
+    ],
+    recurrentes: [
+      {montant: 1000, membre_id: null},                    // communes : 500 chacun
+      {montant: 100, membre_id: null, dans_solde: true},   // déjà partie : ignorée
+      {montant: 30, membre_id: 'a'},
+      {montant: 20, membre_id: 'b', dans_solde: true},
+    ],
+    depenses: [
+      {membre_id: 'a', montant: 50, date: '2026-10-20'},   // avant le solde : déjà dedans
+      {membre_id: 'a', montant: 80, date: '2026-10-29'},
+      {membre_id: 'b', montant: 60, date: '2026-10-30'},
+    ],
+    versements: [{montant: 200, membre_id: null}, {montant: 50, membre_id: 'b'}],
+  });
+  assert.deepEqual(a, {membre_id: 'a', renseigne: true, solde: 2500, depensesDepuisSolde: 0, salaireARecevoir: 0,
+    communes: 500, chargesPerso: 30, depensesPayees: 80, objectifs: 100, reste: 1790});
+  assert.equal(b.salaireARecevoir, 1800);
+  assert.equal(b.chargesPerso, 0);
+  assert.equal(b.objectifs, 150);
+  assert.equal(b.reste, 400 + 1800 - 500 - 60 - 150);
+});
+test('colonnesMembres : part non remplie et membre seul', () => {
+  const [seul] = colonnesMembres({ids: ['a'], membres: [], recurrentes: [{montant: 90, membre_id: null}]});
+  assert.equal(seul.renseigne, false);
+  assert.equal(seul.solde, null);
+  assert.equal(seul.communes, 90);
+  assert.equal(seul.reste, -90);
+});
+test('faisabiliteObjectif croise le rythme et le reste libre', () => {
+  const o = {fin: '2027-06'};
+  const p = (x) => ({statut: 'projete', moisAtteinte: '2027-05', effortNecessaire: 150, echu: false, ...x});
+  assert.equal(faisabiliteObjectif(o, p(), 400).niveau, 'realisable');
+  assert.equal(faisabiliteObjectif(o, p({moisAtteinte: '2027-09'}), 400).niveau, 'serre');
+  assert.equal(faisabiliteObjectif(o, p(), 100).niveau, 'serre');
+  assert.equal(faisabiliteObjectif(o, p({moisAtteinte: '2027-09'}), 100).niveau, 'difficile');
+  assert.equal(faisabiliteObjectif(o, p({statut: 'sans'}), 400).niveau, 'realisable');
+  assert.equal(faisabiliteObjectif(o, p({statut: 'sans'}), null).niveau, 'inconnu');
+  assert.equal(faisabiliteObjectif(o, p({statut: 'non_atteint'}), null).niveau, 'difficile');
+  assert.equal(faisabiliteObjectif(o, p({statut: 'atteint'}), null).niveau, 'atteint');
+  assert.equal(faisabiliteObjectif(o, p({echu: true}), 9999).niveau, 'difficile');
 });

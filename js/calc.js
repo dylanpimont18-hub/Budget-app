@@ -117,9 +117,8 @@ export function resumeBudgets(lignes) {
 // Une dépense est déjà déduite si son payeur a saisi un solde et qu'elle date d'avant ce solde, ou du même jour
 // et enregistrée avant lui (solde_a). Une dépense d'avant le 1er faite après le solde en sort encore.
 // Sans aucun solde saisi, les cases « déjà passé sur le compte » des revenus, charges et versements sont ignorées.
-export function syntheseMois({membres = [], revenus = [], recurrentes = [], budgets = [], depenses = [], versements = [],
-  depensesAvant = []}) {
-  const avecSolde = membres.some((m) => m.solde != null);
+// Une dépense est déjà dans le solde de son payeur si elle date d'avant ce solde, ou du même jour et enregistrée avant lui
+function deductions(membres) {
   const soldes = new Map(membres.filter((m) => m.solde != null && m.solde_le).map((m) => [m.membre_id, m]));
   const dejaDeduite = (d) => {
     const m = soldes.get(d.membre_id);
@@ -127,6 +126,13 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
     if (d.date !== m.solde_le) return d.date < m.solde_le;
     return Boolean(m.solde_a && d.cree_le && new Date(d.cree_le) <= new Date(m.solde_a));
   };
+  return {soldes, dejaDeduite};
+}
+
+export function syntheseMois({membres = [], revenus = [], recurrentes = [], budgets = [], depenses = [], versements = [],
+  depensesAvant = []}) {
+  const avecSolde = membres.some((m) => m.solde != null);
+  const {soldes, dejaDeduite} = deductions(membres);
   const depensesDepuisSolde = somme(depensesAvant.filter((d) => soldes.has(d.membre_id) && !dejaDeduite(d))
     .map((d) => d.montant));
   const comptes = arrondi(somme(membres.map((m) => m.solde)) - depensesDepuisSolde);
@@ -166,6 +172,36 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
     objectifs, objectifsAVenir, resteLibre,
     pctResteLibre: disponible > 0 ? arrondi((resteLibre / disponible) * 100) : null,
   };
+}
+
+// Une colonne par membre : son solde, son salaire s'il n'y est pas encore, moins sa part de ce qui reste à sortir.
+// Les charges communes passent par le compte joint : chacun y vire sa part (montant / nombre de membres).
+// Charges perso et dépenses ne pèsent que sur leur payeur ; un versement commun (membre_id null) est partagé.
+// Les budgets non encore dépensés restent au niveau du foyer : on ne sait pas encore qui paiera.
+// membres : membresMois des membres actifs (même forme que syntheseMois) ; ids : identifiants des membres actifs.
+export function colonnesMembres({membres = [], ids = [], recurrentes = [], depenses = [], versements = [],
+  depensesAvant = []}) {
+  const avecSolde = membres.some((m) => m.solde != null);
+  const {soldes, dejaDeduite} = deductions(membres);
+  const parts = Math.max(1, ids.length);
+  const aSortir = (x) => !(avecSolde && x.dans_solde);
+  const commun = (x) => !ids.includes(x.membre_id);
+  const communes = arrondi(somme(recurrentes.filter((r) => commun(r) && aSortir(r)).map((r) => r.montant)) / parts);
+  const versementsCommuns = arrondi(somme(versements.filter((v) => commun(v) && aSortir(v)).map((v) => v.montant)) / parts);
+
+  return ids.map((id) => {
+    const m = membres.find((x) => x.membre_id === id);
+    const siens = (liste) => liste.filter((x) => x.membre_id === id);
+    const solde = m?.solde == null ? null : Number(m.solde);
+    const depensesDepuisSolde = soldes.has(id) ? somme(siens(depensesAvant).filter((d) => !dejaDeduite(d)).map((d) => d.montant)) : 0;
+    const salaireARecevoir = m && !(m.salaire_dans_solde && m.solde != null) ? Number(m.salaire) || 0 : 0;
+    const chargesPerso = somme(siens(recurrentes).filter(aSortir).map((r) => r.montant));
+    const depensesPayees = somme(siens(depenses).filter((d) => !dejaDeduite(d)).map((d) => d.montant));
+    const objectifs = arrondi(somme(siens(versements).filter(aSortir).map((v) => v.montant)) + versementsCommuns);
+    const reste = arrondi((solde ?? 0) - depensesDepuisSolde + salaireARecevoir - communes - chargesPerso - depensesPayees - objectifs);
+    return {membre_id: id, renseigne: Boolean(m?.renseigne), solde, depensesDepuisSolde, salaireARecevoir,
+      communes, chargesPerso, depensesPayees, objectifs, reste};
+  });
 }
 
 // Bilan d'un mois terminé : budgets prévus, dépensé, catégories dépassées (de la plus dépassée à la moins)
@@ -363,6 +399,27 @@ export function raisonsBaisse(courant, precedent, categories, membres) {
 
 // Projection au rythme des 3 derniers mois terminés (avant moisCourant, pas avant le début ; un mois sans versement vaut 0).
 // statut : 'atteint', 'projete', 'non_atteint' (rythme ≤ 0) ou 'sans' (aucun mois terminé depuis le début).
+// Objectif réalisable ? Deux indices : le rythme des derniers versements (projectionObjectif) et la place que
+// laisse le reste libre du mois (resteLibre, null s'il est inconnu) pour l'effort mensuel encore nécessaire.
+// → {niveau: 'atteint' | 'realisable' | 'serre' | 'difficile' | 'inconnu', rythmeOk, resteOk, effort}
+export function faisabiliteObjectif(objectif, projection, resteLibre) {
+  const effort = projection.effortNecessaire;
+  if (projection.statut === 'atteint') return {niveau: 'atteint', rythmeOk: true, resteOk: true, effort: 0};
+  if (projection.echu) return {niveau: 'difficile', rythmeOk: false, resteOk: false, effort};
+  // Plus aucun versement ces derniers mois (non_atteint) : le rythme ne suffit pas ; trop récent (sans) : pas d'avis
+  let rythmeOk = null;
+  if (projection.statut === 'projete') rythmeOk = projection.moisAtteinte <= objectif.fin;
+  else if (projection.statut === 'non_atteint') rythmeOk = false;
+  const resteOk = resteLibre == null ? null : effort <= resteLibre;
+  const indices = [rythmeOk, resteOk].filter((x) => x != null);
+  let niveau;
+  if (!indices.length) niveau = 'inconnu';
+  else if (indices.every(Boolean)) niveau = 'realisable';
+  else if (indices.some(Boolean)) niveau = 'serre';
+  else niveau = 'difficile';
+  return {niveau, rythmeOk, resteOk, effort};
+}
+
 export function projectionObjectif(objectif, versements, moisCourant) {
   const cible = Number(objectif.cible);
   const siens = versements.filter((v) => v.objectif_id === objectif.id);

@@ -1,7 +1,8 @@
 // Onglet Objectifs : épargne par objectif, versements et retraits, archives.
 import {creerObjectif, modifierObjectif, archiverObjectif, ajouterVersement, supprimerVersement} from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
-import {formatEUR, libelleMois, nbMois, decalerMois, effortMensuel, cibleDepuisMensuel, suiviObjectif} from '../calc.js';
+import {formatEUR, libelleMois, nbMois, decalerMois, effortMensuel, cibleDepuisMensuel, suiviObjectif, syntheseMois,
+  projectionObjectif, faisabiliteObjectif} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
 
 const ICONES = ['🏖️', '🚗', '🏠', '🎁', '🎓', '💍', '🛟', '🎯'];
@@ -18,6 +19,40 @@ export function estArchive(o) {
   return s.statut === 'atteint' || s.echu;
 }
 
+// Reste libre du mois en cours, seulement s'il est fiable : mois affiché = mois en cours et chaque part remplie
+function resteLibreDuMois() {
+  const d = etat.donnees;
+  if (!d?.mois || !estMoisCourant()) return null;
+  if (etat.membres.some((m) => !d.membresMois.find((x) => x.membre_id === m.id)?.renseigne)) return null;
+  return syntheseMois({membres: d.membresMois, revenus: d.revenus, recurrentes: d.recurrentes, budgets: d.budgets,
+    depenses: d.depenses, versements: d.versements, depensesAvant: d.depensesAvant}).resteLibre;
+}
+
+const NIVEAUX = {realisable: ['ok', 'Réalisable'], serre: ['alerte', 'Serré'], difficile: ['depasse', 'Difficile']};
+
+// Estimateur : réalisable ? d'après le rythme des derniers versements et le reste libre du mois
+function estimation(o, resteLibre) {
+  const p = projectionObjectif(o, versementsDe(o), etat.moisCourantCle);
+  const f = faisabiliteObjectif(o, p, resteLibre);
+  if (!NIVEAUX[f.niveau]) return null;
+  const [niveau, libelle] = NIVEAUX[f.niveau];
+  const raisons = [];
+  if (p.statut === 'projete') {
+    raisons.push(f.rythmeOk
+      ? `À ton rythme (${formatEUR(p.rythme)}/mois), atteint en ${libelleMois(p.moisAtteinte)}`
+      : `À ton rythme (${formatEUR(p.rythme)}/mois), atteint seulement en ${libelleMois(p.moisAtteinte)}, après l'échéance`);
+  } else if (p.statut === 'non_atteint') raisons.push('Aucun versement ces 3 derniers mois');
+  if (p.echu) raisons.push('L\'échéance est passée');
+  else if (f.resteOk != null) {
+    raisons.push(f.resteOk
+      ? `${formatEUR(f.effort)}/mois nécessaires : ça tient dans le reste libre (${formatEUR(resteLibre)})`
+      : `${formatEUR(f.effort)}/mois nécessaires, plus que le reste libre du mois (${formatEUR(resteLibre)})`);
+  }
+  return el('div', {class: `estimation bord-niveau-${niveau}`},
+    el('span', {class: `pastille petite niveau-${niveau}`}, libelle),
+    raisons.map((t) => el('div', {class: 'estimation-raison'}, t)));
+}
+
 function statutAffiche(s) {
   return s.statut !== 'atteint' && s.echu ? 'echu' : s.statut;
 }
@@ -26,21 +61,22 @@ export function rendreObjectifs(conteneur) {
   const objectifs = etat.donnees.objectifs;
   const actifs = objectifs.filter((o) => !estArchive(o));
   const archives = objectifs.filter(estArchive);
+  const resteLibre = resteLibreDuMois();
 
   ajouter(conteneur, [
     el('div', {class: 'entete-vue'}, el('h1', {}, 'Objectifs')),
     actifs.length
-      ? el('div', {class: 'grille-ordinateur'}, actifs.map(carteObjectif))
+      ? el('div', {class: 'grille-ordinateur'}, actifs.map((o) => carteObjectif(o, resteLibre)))
       : el('p', {class: 'vide-liste'}, 'Aucun objectif en cours. Crées-en un pour suivre ton épargne.'),
     el('button', {class: 'btn-secondaire', type: 'button', onclick: () => ouvrirFormulaire(null)}, '+ Nouvel objectif'),
     archives.length
       ? el('details', {class: 'repliable', style: {marginTop: '16px'}},
           el('summary', {}, `Archivés (${archives.length})`),
-          el('div', {class: 'grille-ordinateur'}, archives.map(carteObjectif)))
+          el('div', {class: 'grille-ordinateur'}, archives.map((o) => carteObjectif(o))))
       : null]);
 }
 
-function carteObjectif(o) {
+function carteObjectif(o, resteLibre = null) {
   const s = suivi(o);
   const statut = statutAffiche(s);
   const cible = Number(o.cible);
@@ -58,7 +94,8 @@ function carteObjectif(o) {
     el('span', {class: 'montant'}, `${formatEUR(s.verse)} / ${formatEUR(cible)}`),
     el('span', {}, s.echu || statut === 'atteint'
       ? `Fin ${libelleMois(o.fin)}`
-      : `${s.moisRestants} mois restant${s.moisRestants > 1 ? 's' : ''} · ${formatEUR(s.effortRecalcule)}/mois`)));
+      : `${s.moisRestants} mois restant${s.moisRestants > 1 ? 's' : ''} · ${formatEUR(s.effortRecalcule)}/mois`)),
+  estArchive(o) ? null : estimation(o, resteLibre));
 }
 
 // ── Création / modification ────────────────────────────────────────────
@@ -195,6 +232,7 @@ function ouvrirDetail(o) {
       stat('Prévu à date', formatEUR(s.prevu), `Effort initial ${formatEUR(effortMensuel(Number(o.cible), o.debut, o.fin))}/mois`),
       stat('Mois restants', String(s.moisRestants), s.moisRestants ? `${formatEUR(s.effortRecalcule)}/mois` : '—')),
     proposition,
+    estArchive(o) ? null : estimation(o, resteLibreDuMois()),
     o.archive ? null : el('div', {class: 'rangee'},
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => { feuille.fermer(); ouvrirVersement(o, 1); }}, 'Verser'),
       el('button', {class: 'btn-secondaire', type: 'button', onclick: () => { feuille.fermer(); ouvrirVersement(o, -1); }}, 'Retirer')),

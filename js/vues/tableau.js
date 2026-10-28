@@ -2,7 +2,7 @@
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
 import {modifierBudget, modifierMoisMembre, regenererCode, retirerMembre} from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
-import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, depensesParCategorie, totalParMembre, topPostes} from '../calc.js';
+import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, colonnesMembres, depensesParCategorie, topPostes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
 import {selecteurMois, aujourdhui, categorieDe} from './depenses.js';
 import {formulairePart, de} from './part-membre.js';
@@ -93,8 +93,9 @@ function bandeaux() {
     const suivant = libelleMois(decalerMois(etat.moisCourantCle, 1)).split(' ')[0];
     const ouvert = d.moisDisponibles.includes(decalerMois(etat.moisCourantCle, 1));
     resultat.push(el('div', {class: 'bandeau-info discret', role: 'status'},
-      el('span', {}, ouvert ? `${suivant[0].toUpperCase()}${suivant.slice(1)} est déjà ouvert` : `Paye reçue ? Ouvre ${suivant} en avance`),
-      el('button', {class: 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant}, ouvert ? 'Y aller' : 'Ouvrir')));
+      el('span', {}, ouvert ? `${suivant[0].toUpperCase()}${suivant.slice(1)} est déjà ouvert`
+        : `Paye reçue ? Ton solde de maintenant servira pour ${suivant}`),
+      el('button', {class: 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant}, ouvert ? 'Y aller' : `Oui, pour ${suivant}`)));
   }
   return resultat;
 }
@@ -315,32 +316,47 @@ function editerBudget(categorie, actuel) {
 
 // ── Par personne ───────────────────────────────────────────────────────
 
+// Une colonne par personne : son solde, moins sa moitié des charges communes (virée au compte joint),
+// ses charges perso, ce qu'elle a payé et ses versements ; les budgets restants sont au niveau du foyer.
 function blocMembres() {
   const d = etat.donnees;
-  const depenses = totalParMembre(d.depenses);
-  return el('div', {class: 'grille-stats'}, etat.membres.map((m) => {
-    const mm = d.membresMois.find((x) => x.membre_id === m.id);
-    const infos = !mm || !mm.renseigne
-      ? [el('div', {class: 'sous-stat', style: {marginTop: '6px'}}, 'Part du mois à remplir')]
-      : [
-          el('div', {class: 'sous-stat', style: {marginTop: '6px'}},
-            `Salaire ${mm.salaire_recu ? 'reçu' : 'attendu'} ${formatEUR(Number(mm.salaire))}`),
-          el('div', {class: 'sous-stat'}, mm.solde == null
-            ? 'Solde : non saisi'
-            : `Solde ${formatEUR(Number(mm.solde))}${mm.solde_le ? ` au ${libelleDate(mm.solde_le)}` : ''}`),
-        ];
-    const perso = d.recurrentes.filter((r) => r.membre_id === m.id).reduce((t, r) => t + Number(r.montant), 0);
-    if (perso > 0) infos.push(el('div', {class: 'sous-stat'}, `Charges perso ${formatEUR(perso)}`));
-    const contenu = [
-      el('div', {class: 'etiquette-stat'}, m.prenom),
-      el('div', {class: 'valeur-stat montant'}, formatEUR(depenses[m.id] ?? 0)),
-      el('div', {class: 'sous-stat'}, 'dépensé ce mois'),
-      infos,
-    ];
-    // Modifiable aussi dans un mois passé (correction)
-    return el('button', {class: 'carte-stat', type: 'button', style: {textAlign: 'left', font: 'inherit'},
-      'aria-label': `Modifier salaire et solde de ${m.prenom}`, onclick: () => editerMembre(m, mm)}, contenu);
-  }));
+  const colonnes = colonnesMembres({membres: d.membresMois, ids: etat.membres.map((m) => m.id), recurrentes: d.recurrentes,
+    depenses: d.depenses, versements: d.versements, depensesAvant: d.depensesAvant});
+  const ligne = (libelle, valeur, signe) => (valeur ? el('div', {class: 'detail-stat'}, el('span', {}, libelle),
+    el('span', {class: 'montant'}, `${signe}${formatEUR(valeur)}`)) : null);
+  const b = bilanMois({budgets: d.budgets, depenses: d.depenses});
+  const budgetsRestants = Math.max(0, b.prevu - b.depense);
+  return el('div', {},
+    el('div', {class: 'grille-stats'}, etat.membres.map((m) => {
+      const c = colonnes.find((x) => x.membre_id === m.id);
+      const mm = d.membresMois.find((x) => x.membre_id === m.id);
+      const contenu = !c.renseigne
+        ? [el('div', {class: 'etiquette-stat'}, m.prenom),
+            el('div', {class: 'sous-stat', style: {marginTop: '6px'}}, 'Part du mois à remplir : solde du compte'),
+            el('div', {class: 'sous-stat lien-stat'}, 'Remplir ›')]
+        : [el('div', {class: 'etiquette-stat'}, m.prenom),
+            el('div', {class: `valeur-stat montant niveau-texte-${c.reste < 0 ? 'depasse' : 'ok'}`}, formatEUR(c.reste)),
+            el('div', {class: 'sous-stat'}, c.solde != null && mm?.solde_le
+              ? `reste · solde du ${libelleDate(mm.solde_le)}` : 'reste après sa part'),
+            el('div', {class: 'detail-colonne'},
+              el('div', {class: 'detail-stat'}, el('span', {}, c.solde == null ? 'Solde ?' : 'Solde'),
+              el('span', {class: 'montant'}, formatEUR(c.solde ?? 0))),
+              ligne('Depuis le solde', c.depensesDepuisSolde, '−'),
+              ligne('Salaire', c.salaireARecevoir, '+'),
+              ligne('Communes', c.communes, '−'),
+              ligne('Perso', c.chargesPerso, '−'),
+              ligne('Dépenses', c.depensesPayees, '−'),
+              ligne('Objectifs', c.objectifs, '−'))];
+      // Modifiable aussi dans un mois passé (correction)
+      return el('button', {class: `carte-stat colonne-membre${c.renseigne && c.reste < 0 ? ' en-negatif' : ''}`, type: 'button',
+        style: {textAlign: 'left', font: 'inherit'}, 'aria-label': `${m.prenom} : modifier salaire et solde`,
+        onclick: () => editerMembre(m, mm)}, contenu);
+    })),
+    el('p', {class: 'attenue', style: {margin: '0 0 12px', fontSize: '0.85rem'}},
+      'Communes : la part de chacun à virer sur le compte joint.',
+      budgetsRestants > 0 && estMoisCourant()
+        ? ` Encore ${formatEUR(budgetsRestants)} de budgets à dépenser : chaque dépense sortira de la colonne de qui la paie.`
+        : ''));
 }
 
 // Remplir sa part, celle de l'autre, ou corriger une réponse
