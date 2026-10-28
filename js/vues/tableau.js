@@ -2,10 +2,10 @@
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
 import {modifierBudget, modifierMoisMembre, regenererCode, retirerMembre} from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
-import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, colonnesMembres, depensesParCategorie, topPostes} from '../calc.js';
+import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, depensesParCategorie, topPostes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
-import {selecteurMois, aujourdhui, categorieDe} from './depenses.js';
-import {formulairePart, de} from './part-membre.js';
+import {selecteurMois, categorieDe} from './depenses.js';
+import {editerPart, de} from './part-membre.js';
 import {ouvrirRevenus, ouvrirCategories, ouvrirProfil} from './reglages.js';
 import {ouvrirConfirmation, repartitionCharges} from './recurrentes.js';
 import {copier} from './connexion.js';
@@ -19,11 +19,6 @@ const SVG = 'http://www.w3.org/2000/svg';
 
 const pct = (x, total) => (total > 0 ? (x / total) * 100 : 0);
 const formatPct = (x) => `${x.toLocaleString('fr-FR', {maximumFractionDigits: 1})} %`;
-const formatJourCourt = new Intl.DateTimeFormat('fr-FR', {day: 'numeric', month: 'long'});
-const libelleDate = (iso) => {
-  const [a, m, j] = iso.split('-').map(Number);
-  return formatJourCourt.format(new Date(a, m - 1, j));
-};
 
 export function rendreTableau(conteneur) {
   const d = etat.donnees;
@@ -50,7 +45,6 @@ export function rendreTableau(conteneur) {
     el('div', {class: 'grille-ordinateur'},
       el('section', {}, estMoisCourant() ? cartes(synthese) : bilan()),
       el('section', {}, el('h2', {}, 'Budgets par catégorie'), categories()),
-      el('section', {}, el('h2', {}, 'Par personne'), blocMembres()),
       el('section', {}, el('h2', {}, 'Répartition'), graphiques(synthese, {prevision: estMoisCourant()}))),
     piedDePage()]);
 }
@@ -64,7 +58,7 @@ function bandeaux() {
   if (mien && !mien.renseigne) {
     resultat.push(el('div', {class: 'bandeau-info', role: 'status'},
       el('span', {}, 'Remplis ta part du mois : salaire et solde'),
-      el('button', {class: 'btn-primaire', type: 'button', onclick: () => editerMembre(etat.moi, mien)}, 'Remplir')));
+      el('button', {class: 'btn-primaire', type: 'button', onclick: () => editerPart(etat.moi, mien)}, 'Remplir')));
   }
   // La part de l'autre peut aussi être remplie d'ici, si on connaît son salaire et son solde
   for (const mm of d.membresMois.filter((x) => x.membre_id !== etat.moi.id && !x.renseigne)) {
@@ -72,7 +66,7 @@ function bandeaux() {
     if (!membre) continue;
     resultat.push(el('div', {class: 'bandeau-info discret', role: 'status'},
       el('span', {}, `Part ${de(membre.prenom)} pas encore remplie`),
-      el('button', {class: 'btn-secondaire', type: 'button', onclick: () => editerMembre(membre, mm)}, 'Remplir')));
+      el('button', {class: 'btn-secondaire', type: 'button', onclick: () => editerPart(membre, mm)}, 'Remplir')));
   }
   for (const r of d.recurrentes.filter((x) => x.a_confirmer)) {
     resultat.push(el('div', {class: 'bandeau-info', role: 'status'},
@@ -94,8 +88,8 @@ function bandeaux() {
     const ouvert = d.moisDisponibles.includes(decalerMois(etat.moisCourantCle, 1));
     resultat.push(el('div', {class: 'bandeau-info discret', role: 'status'},
       el('span', {}, ouvert ? `${suivant[0].toUpperCase()}${suivant.slice(1)} est déjà ouvert`
-        : `Paye reçue ? Ton solde de maintenant servira pour ${suivant}`),
-      el('button', {class: 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant}, ouvert ? 'Y aller' : `Oui, pour ${suivant}`)));
+        : `Paye reçue ? Ton solde servira pour ${suivant}`),
+      el('button', {class: 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant}, ouvert ? 'Y aller' : 'Oui')));
   }
   return resultat;
 }
@@ -312,92 +306,6 @@ function editerBudget(categorie, actuel) {
   message, bouton);
   feuille = ouvrirFeuille(form, {titre: 'Modifier le budget'});
   champ.input.focus();
-}
-
-// ── Par personne ───────────────────────────────────────────────────────
-
-// Une colonne par personne : son solde, moins sa moitié des charges communes (virée au compte joint),
-// ses charges perso, ce qu'elle a payé et ses versements ; les budgets restants sont au niveau du foyer.
-function blocMembres() {
-  const d = etat.donnees;
-  const colonnes = colonnesMembres({membres: d.membresMois, ids: etat.membres.map((m) => m.id), revenus: d.revenus, recurrentes: d.recurrentes,
-    depenses: d.depenses, versements: d.versements, depensesAvant: d.depensesAvant});
-  const ligne = (libelle, valeur, signe) => (valeur ? el('div', {class: 'detail-stat'}, el('span', {}, libelle),
-    el('span', {class: 'montant'}, `${signe}${formatEUR(valeur)}`)) : null);
-  const b = bilanMois({budgets: d.budgets, depenses: d.depenses});
-  const budgetsRestants = Math.max(0, b.prevu - b.depense);
-  return el('div', {},
-    el('div', {class: 'grille-stats'}, etat.membres.map((m) => {
-      const c = colonnes.find((x) => x.membre_id === m.id);
-      const mm = d.membresMois.find((x) => x.membre_id === m.id);
-      const contenu = !c.renseigne
-        ? [el('div', {class: 'etiquette-stat'}, m.prenom),
-            el('div', {class: 'sous-stat', style: {marginTop: '6px'}}, 'Part du mois à remplir : solde du compte'),
-            el('div', {class: 'sous-stat lien-stat'}, 'Remplir ›')]
-        : [el('div', {class: 'etiquette-stat'}, m.prenom),
-            el('div', {class: `valeur-stat montant niveau-texte-${c.reste < 0 ? 'depasse' : 'ok'}`}, formatEUR(c.reste)),
-            el('div', {class: 'sous-stat'}, c.solde != null && mm?.solde_le
-              ? `reste · solde du ${libelleDate(mm.solde_le)}` : 'reste après sa part'),
-            el('div', {class: 'detail-colonne'},
-              el('div', {class: 'detail-stat'}, el('span', {}, c.solde == null ? 'Solde ?' : 'Solde'),
-              el('span', {class: 'montant'}, formatEUR(c.solde ?? 0))),
-              ligne('Depuis le solde', c.depensesDepuisSolde, '−'),
-              ligne('Salaire', c.salaireARecevoir, '+'),
-              ligne('Revenus', c.revenusARecevoir, '+'),
-              ligne('Communes', c.communes, '−'),
-              ligne('Perso', c.chargesPerso, '−'),
-              ligne('Dépenses', c.depensesPayees, '−'),
-              ligne('Objectifs', c.objectifs, '−'))];
-      // Modifiable aussi dans un mois passé (correction)
-      return el('button', {class: `carte-stat colonne-membre${c.renseigne && c.reste < 0 ? ' en-negatif' : ''}`, type: 'button',
-        style: {textAlign: 'left', font: 'inherit'}, 'aria-label': `${m.prenom} : modifier salaire et solde`,
-        onclick: () => editerMembre(m, mm)}, contenu);
-    })),
-    el('p', {class: 'attenue', style: {margin: '0 0 12px', fontSize: '0.85rem'}},
-      'Communes : la part de chacun à virer sur le compte joint ; un revenu commun (CAF) est partagé de même.',
-      budgetsRestants > 0 && estMoisCourant()
-        ? ` Encore ${formatEUR(budgetsRestants)} de budgets à dépenser : chaque dépense sortira de la colonne de qui la paie.`
-        : ''));
-}
-
-// Remplir sa part, celle de l'autre, ou corriger une réponse
-function editerMembre(membre, mm) {
-  const premiereFois = !mm?.renseigne;
-  const part = formulairePart({membre, cle: etat.moisCle, premiereFois,
-    valeurs: {salaire: mm?.salaire, solde: mm?.solde, salaire_dans_solde: mm?.salaire_dans_solde}});
-  const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
-  const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, 'Enregistrer');
-  let feuille;
-  const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
-    e.preventDefault();
-    message.textContent = '';
-    const r = part.valider();
-    if (!r.ok) return;
-    const {salaire, solde, salaire_dans_solde: oui} = r.valeurs;
-    // Nouveau solde : sa date et son heure changent ; les dépenses enregistrées avant y sont considérées comme déduites
-    const soldeChange = premiereFois || solde !== (mm?.solde == null ? null : Number(mm.solde));
-    const soldeLe = solde == null ? null : (soldeChange ? aujourdhui() : mm.solde_le);
-    const soldeA = solde == null ? null : (soldeChange ? new Date().toISOString() : mm.solde_a);
-    // Déjà dans le solde ⇒ reçu ; si l'on revient sur un « oui », le salaire redevient à confirmer
-    const recu = oui || (mm?.salaire_dans_solde ? false : Boolean(mm?.salaire_recu));
-    bouton.disabled = true;
-    try {
-      await modifierMoisMembre(etat.foyer.id, etat.donnees.mois.id, membre.id, {salaire, solde,
-        solde_le: soldeLe, solde_a: soldeA, salaire_dans_solde: oui, salaire_recu: recu, renseigne: true});
-      feuille.fermer();
-      toast('Enregistré');
-      await recharger();
-    } catch (err) {
-      message.textContent = err.message;
-      bouton.disabled = false;
-    }
-  }},
-  part.element,
-  premiereFois ? null : el('p', {class: 'attenue', style: {margin: 0}},
-    'Nouveau solde ? Les dépenses déjà enregistrées y sont considérées comme déduites. '
-    + 'Coche ensuite dans Récurrentes les charges déjà prélevées.'),
-  message, bouton);
-  feuille = ouvrirFeuille(form, {titre: membre.prenom});
 }
 
 // ── Graphiques ─────────────────────────────────────────────────────────

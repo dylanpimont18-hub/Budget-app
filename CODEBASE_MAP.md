@@ -154,30 +154,35 @@ Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue p
 Onglet Dépenses, historique mensuel, formulaire de dépense partagé ; sur ordinateur, tableau + panneau de saisie et budgets.
 - formulaireDepense({depense, onValider, prefixe}) — saisie / modification d'une dépense
 - selecteurMois() — navigation ‹ mois › entre mois ouverts
-- rendreDepenses(conteneur) — journal par date ou catégorie (tableau sur ordinateur)
+- rendreDepenses(conteneur) — « Par personne » en tête, puis journal par date ou catégorie (tableau sur ordinateur)
 - categorieDe(id) / aujourdhui() — utilitaires partagés
 
 ## js/vues/ajout-rapide.js
-Bouton « + » flottant.
+Bouton « + » flottant : Dépense ou Revenu.
 - initAjoutRapide(bouton) — ouvre la feuille de saisie rapide
 
+## js/vues/par-personne.js
+Colonnes « Par personne » de l'onglet Dépenses (calc.colonnesMembres) : avatar, reste, barre des sorties, détail.
+- blocParPersonne() — une carte par membre ; toucher une carte ouvre sa part du mois
+
 ## js/vues/tableau.js
-Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, par personne, graphiques SVG.
+Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, graphiques SVG.
 Exporte `COULEURS` et `GRIS_AUTRES` (couleurs des graphiques, réutilisées par les rapports).
 - rendreTableau(conteneur) — tableau de bord du mois affiché
 - bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?, ouvrir le mois suivant en avance
-- editerMembre(membre, mm) — salaire, solde daté, déjà dans le solde
 - bilan() — bilan d'un mois passé (remplace la prévision)
 - blocFoyer() — code d'invitation (tant que le foyer attend son 2e membre), changer le code, retirer un membre
 
 ## js/vues/part-membre.js
-Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), partagée ouverture / Budget.
+Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), partagée ouverture / Budget / Par personne.
 - formulairePart({membre, cle, valeurs, premiereFois}) — solde d'abord (obligatoire si le salaire y est déjà, montant du salaire alors facultatif), préremplissage si payé fin M-1
+- editerPart(membre, mm) — feuille : salaire, solde daté, déjà dans le solde
 - de(prenom) — réexporté depuis calc.js
 
 ## js/vues/reglages.js
 Feuilles ouvertes depuis l'onglet Budget.
-- ouvrirRevenus() — autres revenus du mois
+- ouvrirRevenus() — autres revenus du mois (communs ou perso)
+- formulaireRevenu({revenu, onValider, libelleBouton}) — formulaire partagé avec le bouton +
 - ouvrirCategories() — créer, renommer, désactiver
 - ouvrirProfil() — prénom, salaire habituel, salaire payé fin du mois d'avant
 

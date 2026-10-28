@@ -1,8 +1,10 @@
 // Part d'un membre pour un mois : solde, salaire déjà compris dedans ou non, montant du salaire.
-// Partagée par l'ouverture du mois (sa part, et celle de l'autre si on la connaît) et l'onglet Budget.
-import {etat} from '../etat.js';
+// Partagée par l'ouverture du mois (sa part, et celle de l'autre si on la connaît), l'onglet Budget et « Par personne ».
+import {modifierMoisMembre} from '../db.js';
+import {etat, recharger} from '../etat.js';
 import {libelleMois, decalerMois, de} from '../calc.js';
-import {el, champMontant, choixOuiNon} from '../ui.js';
+import {el, champMontant, choixOuiNon, ouvrirFeuille, toast} from '../ui.js';
+import {aujourdhui} from './depenses.js';
 
 export {de};
 
@@ -74,4 +76,44 @@ export function formulairePart({membre, cle, valeurs = {}, premiereFois = true})
       return {ok: true, valeurs: {membre_id: membre.id, salaire: s.valeur ?? salaireProbable, solde: o.valeur, salaire_dans_solde: oui}};
     },
   };
+}
+
+// Remplir sa part, celle de l'autre, ou corriger une réponse
+export function editerPart(membre, mm) {
+  const premiereFois = !mm?.renseigne;
+  const part = formulairePart({membre, cle: etat.moisCle, premiereFois,
+    valeurs: {salaire: mm?.salaire, solde: mm?.solde, salaire_dans_solde: mm?.salaire_dans_solde}});
+  const message = el('p', {class: 'message-erreur', 'aria-live': 'polite'});
+  const bouton = el('button', {class: 'btn-primaire', type: 'submit'}, 'Enregistrer');
+  let feuille;
+  const form = el('form', {class: 'formulaire', novalidate: true, onsubmit: async (e) => {
+    e.preventDefault();
+    message.textContent = '';
+    const r = part.valider();
+    if (!r.ok) return;
+    const {salaire, solde, salaire_dans_solde: oui} = r.valeurs;
+    // Nouveau solde : sa date et son heure changent ; les dépenses enregistrées avant y sont considérées comme déduites
+    const soldeChange = premiereFois || solde !== (mm?.solde == null ? null : Number(mm.solde));
+    const soldeLe = solde == null ? null : (soldeChange ? aujourdhui() : mm.solde_le);
+    const soldeA = solde == null ? null : (soldeChange ? new Date().toISOString() : mm.solde_a);
+    // Déjà dans le solde ⇒ reçu ; si l'on revient sur un « oui », le salaire redevient à confirmer
+    const recu = oui || (mm?.salaire_dans_solde ? false : Boolean(mm?.salaire_recu));
+    bouton.disabled = true;
+    try {
+      await modifierMoisMembre(etat.foyer.id, etat.donnees.mois.id, membre.id, {salaire, solde,
+        solde_le: soldeLe, solde_a: soldeA, salaire_dans_solde: oui, salaire_recu: recu, renseigne: true});
+      feuille.fermer();
+      toast('Enregistré');
+      await recharger();
+    } catch (err) {
+      message.textContent = err.message;
+      bouton.disabled = false;
+    }
+  }},
+  part.element,
+  premiereFois ? null : el('p', {class: 'attenue', style: {margin: 0}},
+    'Nouveau solde ? Les dépenses déjà enregistrées y sont considérées comme déduites. '
+    + 'Coche ensuite dans Récurrentes les charges déjà prélevées.'),
+  message, bouton);
+  feuille = ouvrirFeuille(form, {titre: membre.prenom});
 }

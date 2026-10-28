@@ -4,6 +4,7 @@ import {ajouterDepense, modifierDepense, supprimerDepense} from '../db.js';
 import {etat, changerMois, recharger, notifier} from '../etat.js';
 import {formatEUR, libelleMois, niveauBudget, depensesParCategorie} from '../calc.js';
 import {el, ouvrirFeuille, toast, champMontant, estOrdinateur} from '../ui.js';
+import {blocParPersonne} from './par-personne.js';
 
 const CLE_PAYEUR = 'budget.dernierPayeur';
 let regroupement = 'date';
@@ -144,6 +145,8 @@ export function rendreDepenses(conteneur) {
 
   conteneur.append(
     selecteurMois(),
+    // Element.append écrirait « null » : on n'ajoute le bloc que si le mois est ouvert
+    ...(etat.donnees.mois ? [blocParPersonne()] : []),
     el('div', {class: 'entete-vue'},
       el('span', {class: 'attenue'}, `${depenses.length} dépense${depenses.length > 1 ? 's' : ''}`),
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
@@ -241,6 +244,7 @@ function rendreDepensesOrdinateur(conteneur) {
   conteneur.append(el('div', {class: 'disposition-depenses'},
     el('div', {},
       selecteurMois(),
+      etat.donnees.mois ? blocParPersonne() : null,
       el('div', {class: 'entete-vue'},
         el('span', {class: 'attenue'}, `${depenses.length} dépense${depenses.length > 1 ? 's' : ''}`),
         el('span', {class: 'total-entete montant'}, formatEUR(total))),
