@@ -150,7 +150,7 @@ async function lancer() {
     Object.assign(etat, foyer);
 
     moisCalendaire = cleMois();
-    etat.moisCourantCle = moisActif(await listerMois(foyer.id));
+    etat.moisCourantCle = moisActif(await listerMois(etat.foyer.id));
     etat.moisCle = etat.moisCourantCle;
     await recharger();
     demarrerTempsReel();
