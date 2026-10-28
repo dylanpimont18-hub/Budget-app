@@ -1,7 +1,7 @@
 // Démarrage et routage : connexion → foyer → ouverture du mois → onglets.
-import {sb, session, surAuth, chargerFoyer, deconnecter} from './db.js';
+import {sb, session, surAuth, chargerFoyer, deconnecter, listerMois} from './db.js';
 import {etat, abonner, recharger, rechargerEnFond, demarrerTempsReel, arreterTempsReel} from './etat.js';
-import {cleMois} from './calc.js';
+import {cleMois, decalerMois, moisActif} from './calc.js';
 import {el, toast, estOrdinateur, surChangementOrdinateur} from './ui.js';
 import {rendreConnexion, rendreChoixFoyer, rendreNouveauMotDePasse} from './vues/connexion.js';
 import {rendreOuverture} from './vues/ouverture.js';
@@ -117,6 +117,9 @@ function afficherRecuperation() {
   }}));
 }
 
+// Mois calendaire au démarrage : s'il change pendant que l'app dort, on repart du début
+let moisCalendaire = null;
+
 let demarrage = null;
 function demarrer() {
   // Un seul démarrage à la fois (connexion + événement d'auth simultanés)
@@ -143,7 +146,8 @@ async function lancer() {
     }
     Object.assign(etat, foyer);
 
-    etat.moisCourantCle = cleMois();
+    moisCalendaire = cleMois();
+    etat.moisCourantCle = moisActif(await listerMois(foyer.id));
     etat.moisCle = etat.moisCourantCle;
     await recharger();
     demarrerTempsReel();
@@ -155,6 +159,18 @@ async function lancer() {
   } catch (e) {
     afficherErreurDemarrage(e.message);
   }
+}
+
+// Paye reçue avant le 1er : on ouvre le mois suivant sans attendre (ou on y passe s'il l'est déjà)
+export function ouvrirMoisSuivant() {
+  const suivant = decalerMois(moisCalendaire, 1);
+  if (etat.donnees.moisDisponibles.includes(suivant)) {
+    demarrer();
+    return;
+  }
+  etat.moisCourantCle = suivant;
+  etat.moisCle = suivant;
+  afficherEcran((c) => rendreOuverture(c, {apres: () => afficherOnglet('recurrentes', {revue: true}), annuler: demarrer}));
 }
 
 surAuth((evenement) => {
@@ -171,7 +187,7 @@ surAuth((evenement) => {
 // Si le mois calendaire a changé pendant que l'app dormait, on repart du début (ouverture du nouveau mois).
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !etat.foyer || !etat.donnees) return;
-  if (cleMois() !== etat.moisCourantCle) demarrer();
+  if (cleMois() !== moisCalendaire) demarrer();
   else rechargerEnFond();
 });
 

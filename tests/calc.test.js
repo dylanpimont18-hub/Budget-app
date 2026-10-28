@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseMontant, formatEUR, cleMois, decalerMois, nbMois, libelleMois, niveauBudget,
+  parseMontant, formatEUR, cleMois, decalerMois, nbMois, moisActif, peutOuvrirEnAvance, libelleMois, niveauBudget,
   syntheseMois, bilanMois, depensesParCategorie, totalParMembre, topPostes,
   effortMensuel, cibleDepuisMensuel, suiviObjectif, de,
   evolutionCategories, entreesSorties, epargneParMois, progressionObjectif, raisonsBaisse, projectionObjectif,
@@ -305,4 +305,14 @@ test('projectionObjectif : objectif récent, aucun mois terminé, rythme nul, at
   assert.equal(nul.statut, 'non_atteint');
   assert.equal(nul.moisAtteinte, null);
   assert.equal(projectionObjectif(VACANCES, [vers('v', '2026-05', 3000)], '2026-10').statut, 'atteint');
+});
+
+test('moisActif : le mois suivant dès qu\'il est ouvert en avance', () => {
+  const le28 = new Date(2026, 9, 28);
+  assert.equal(moisActif(['2026-10', '2026-09'], le28), '2026-10');
+  assert.equal(moisActif(['2026-11', '2026-10'], le28), '2026-11');
+  assert.equal(moisActif([], le28), '2026-10');
+  assert.equal(moisActif(['2027-01'], new Date(2026, 11, 30)), '2027-01');
+  assert.equal(peutOuvrirEnAvance(le28), true);
+  assert.equal(peutOuvrirEnAvance(new Date(2026, 9, 5)), false);
 });

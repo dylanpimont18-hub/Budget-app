@@ -47,6 +47,19 @@ export function decalerMois(cle, n) {
   return depuisIndex(versIndex(cle) + n);
 }
 
+// La paye du mois suivant arrive souvent avant le 1er : à partir de ce jour, on peut ouvrir ce mois en avance
+export const JOUR_OUVERTURE_ANTICIPEE = 20;
+
+export function peutOuvrirEnAvance(date = new Date()) {
+  return date.getDate() >= JOUR_OUVERTURE_ANTICIPEE;
+}
+
+// Mois en cours pour l'app : le mois calendaire, ou le suivant s'il a déjà été ouvert en avance
+export function moisActif(disponibles, date = new Date()) {
+  const suivant = decalerMois(cleMois(date), 1);
+  return disponibles.includes(suivant) ? suivant : cleMois(date);
+}
+
 export function nbMois(debut, fin) {
   return Math.max(0, versIndex(fin) - versIndex(debut) + 1);
 }
