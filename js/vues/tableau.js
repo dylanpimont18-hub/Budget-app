@@ -2,7 +2,7 @@
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
 import {modifierBudget, modifierMoisMembre, regenererCode, retirerMembre} from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
-import {formatEUR, libelleMois, decalerMois, cleMois, peutOuvrirEnAvance, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, depensesParCategorie, topPostes} from '../calc.js';
+import {formatEUR, libelleMois, decalerMois, cleMois, proposerMoisSuivant, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, depensesParCategorie, topPostes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
 import {selecteurMois, categorieDe} from './depenses.js';
 import {editerPart, de} from './part-membre.js';
@@ -36,7 +36,6 @@ export function rendreTableau(conteneur) {
     budgets: d.budgets,
     depenses: d.depenses,
     versements: d.versements,
-    depensesAvant: d.depensesAvant,
   });
 
   // Mois passé : la prévision n'a plus de sens, on montre le bilan
@@ -82,14 +81,17 @@ function bandeaux() {
       el('span', {}, titre),
       el('button', {class: 'btn-primaire', type: 'button', onclick: () => confirmerSalaire(membre, mm)}, 'Oui, confirmer')));
   }
-  // Fin du mois calendaire : la paye du mois suivant peut déjà être là
-  if (etat.moisCourantCle === cleMois() && peutOuvrirEnAvance()) {
+  // Le mois suivant commence à la saisie du solde, quand la paye arrive : proposé dès le 20, pressant une fois le 1er passé
+  if (estMoisCourant() && proposerMoisSuivant(etat.moisCourantCle)) {
     const suivant = libelleMois(decalerMois(etat.moisCourantCle, 1)).split(' ')[0];
     const ouvert = d.moisDisponibles.includes(decalerMois(etat.moisCourantCle, 1));
-    resultat.push(el('div', {class: 'bandeau-info discret', role: 'status'},
+    const enRetard = etat.moisCourantCle < cleMois();
+    resultat.push(el('div', {class: `bandeau-info${ouvert || enRetard ? '' : ' discret'}`, role: 'status'},
       el('span', {}, ouvert ? `${suivant[0].toUpperCase()}${suivant.slice(1)} est déjà ouvert`
-        : `Paye reçue ? Ton solde servira pour ${suivant}`),
-      el('button', {class: 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant}, ouvert ? 'Y aller' : 'Oui')));
+        : enRetard ? `Paye reçue ? Saisis ton solde pour commencer ${suivant}`
+          : `Paye reçue ? Ton solde ouvre ${suivant}`),
+      el('button', {class: enRetard && !ouvert ? 'btn-primaire' : 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant},
+        ouvert ? 'Y aller' : `Ouvrir ${suivant}`)));
   }
   return resultat;
 }
@@ -150,10 +152,6 @@ function cartes(s) {
     el('div', {class: 'etiquette-stat'}, 'Disponible'),
     el('div', {class: 'valeur-stat montant'}, formatEUR(s.disponible)),
     detail('Sur les comptes', s.comptes),
-    // Mois ouvert en avance : ce qui a été dépensé entre le solde et le 1er est déjà retiré des comptes
-    s.depensesDepuisSolde > 0
-      ? el('div', {class: 'sous-stat'}, `soldes moins ${formatEUR(s.depensesDepuisSolde)} dépensés depuis, avant le 1er`)
-      : null,
     detail('Salaires à recevoir', s.salairesARecevoir),
     detail('Autres revenus à recevoir', s.revenusARecevoir),
     modifiable ? el('div', {class: 'sous-stat lien-stat'}, 'Gérer les autres revenus ›') : null,

@@ -27,7 +27,7 @@ export function blocParPersonne() {
   const d = etat.donnees;
   const ids = etat.membres.map((m) => m.id);
   const colonnes = colonnesMembres({membres: d.membresMois, ids, revenus: d.revenus, recurrentes: d.recurrentes,
-    depenses: d.depenses, versements: d.versements, depensesAvant: d.depensesAvant});
+    depenses: d.depenses, versements: d.versements});
   const b = bilanMois({budgets: d.budgets, depenses: d.depenses});
   const budgetsRestants = Math.max(0, b.prevu - b.depense);
 
@@ -75,7 +75,7 @@ function cartePersonne(m, rang, c, mm) {
       el('span', {class: 'personne-action'}, 'Remplir ›'));
   }
 
-  const entrees = (c.solde ?? 0) - c.depensesDepuisSolde + c.salaireARecevoir + c.revenusARecevoir;
+  const entrees = (c.solde ?? 0) + c.salaireARecevoir + c.revenusARecevoir;
   const sorties = SORTIES.filter(([cle]) => c[cle] > 0);
   const echelle = Math.max(entrees, entrees - c.reste, 1);
   const segment = (cle, valeur) => el('span', {class: `teinte-${cle}`, style: {width: `${(valeur / echelle) * 100}%`}});
@@ -100,8 +100,6 @@ function cartePersonne(m, rang, c, mm) {
     c.salaireARecevoir ? el('li', {class: 'detail-entree'}, el('span', {class: 'detail-libelle'}, 'Salaire'),
       el('span', {class: 'montant'}, `+${euros(c.salaireARecevoir)}`)) : null,
     c.revenusARecevoir ? el('li', {class: 'detail-entree'}, el('span', {class: 'detail-libelle'}, 'Revenus'),
-      el('span', {class: 'montant'}, `+${euros(c.revenusARecevoir)}`)) : null,
-    c.depensesDepuisSolde ? el('li', {class: 'detail-entree'}, el('span', {class: 'detail-libelle'}, 'Avant le 1er'),
-      el('span', {class: 'montant'}, `−${euros(c.depensesDepuisSolde)}`)) : null),
+      el('span', {class: 'montant'}, `+${euros(c.revenusARecevoir)}`)) : null),
   sorties.length ? el('ul', {class: 'detail-personne sorties'}, sorties.map(([cle, libelle]) => detail(libelle, c[cle], '−', cle))) : null);
 }

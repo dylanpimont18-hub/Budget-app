@@ -54,10 +54,55 @@ export function peutOuvrirEnAvance(date = new Date()) {
   return date.getDate() >= JOUR_OUVERTURE_ANTICIPEE;
 }
 
-// Mois en cours pour l'app : le mois calendaire, ou le suivant s'il a déjà été ouvert en avance
+// Mois en cours pour l'app : le dernier mois ouvert. Un mois commence quand on l'ouvre (saisie du solde, paye reçue),
+// pas le 1er : tant que le suivant n'est pas ouvert, on reste sur l'ancien. Après plus d'un mois sans ouverture
+// (ou au tout début), c'est le mois calendaire, à ouvrir.
 export function moisActif(disponibles, date = new Date()) {
-  const suivant = decalerMois(cleMois(date), 1);
-  return disponibles.includes(suivant) ? suivant : cleMois(date);
+  const calendaire = cleMois(date);
+  const dernier = disponibles.filter((c) => c <= decalerMois(calendaire, 1)).sort().at(-1);
+  return dernier && dernier >= decalerMois(calendaire, -1) ? dernier : calendaire;
+}
+
+// Proposer d'ouvrir le mois suivant : dès le 20 du mois en cours, ou tout de suite s'il est déjà passé
+export function proposerMoisSuivant(courant, date = new Date()) {
+  const calendaire = cleMois(date);
+  return courant < calendaire || (courant === calendaire && peutOuvrirEnAvance(date));
+}
+
+// Premier jour d'un mois ouvert : le plus ancien solde saisi pour ce mois, au plus tard le 1er
+// parts : mois_membres du mois [{solde_le}]
+export function debutMois(cle, parts = []) {
+  return [`${cle}-01`, ...parts.map((p) => p.solde_le).filter(Boolean)].sort()[0];
+}
+
+// Période d'un mois ouvert, fin exclue : de son début au début du mois suivant s'il est ouvert ;
+// sinon jusqu'au 1er du mois d'après (le mois suivant pas encore ouvert, ou sauté, lui revient).
+// partsSuivant : mois_membres du mois suivant, null s'il n'est pas ouvert. Dates 'YYYY-MM-DD' ; close : suivant ouvert.
+export function periodeMois(cle, parts = [], partsSuivant = null) {
+  const suivant = decalerMois(cle, 1);
+  return partsSuivant
+    ? {debut: debutMois(cle, parts), fin: debutMois(suivant, partsSuivant), close: true}
+    : {debut: debutMois(cle, parts), fin: `${decalerMois(suivant, 1)}-01`, close: false};
+}
+
+const formateurJour = new Intl.DateTimeFormat('fr-FR', {day: 'numeric', month: 'short'});
+const jourEnClair = (iso, decalage = 0) => {
+  const [a, m, j] = iso.split('-').map(Number);
+  return formateurJour.format(new Date(a, m - 1, j + decalage));
+};
+
+// « depuis le 27 oct. » (mois en cours) ou « du 27 sept. au 26 oct. » ; null pour un mois calendaire du 1er au 1er
+export function periodeEnClair(cle, periode) {
+  if (!periode) return null;
+  const calendaire = periode.debut === `${cle}-01` && (!periode.close || periode.fin === `${decalerMois(cle, 1)}-01`);
+  if (calendaire) return null;
+  return periode.close ? `du ${jourEnClair(periode.debut)} au ${jourEnClair(periode.fin, -1)}` : `depuis le ${jourEnClair(periode.debut)}`;
+}
+
+// Mois d'une dépense datée : le dernier mois ouvert commencé à cette date (null : avant le premier)
+// periodes : [{cle, debut, fin}]
+export function moisDeLaDate(date, periodes) {
+  return periodes.find((p) => p.debut <= date && date < p.fin)?.cle ?? null;
 }
 
 export function nbMois(debut, fin) {
@@ -113,9 +158,9 @@ export function resumeBudgets(lignes) {
 // revenus    : [{montant, dans_solde}]        recurrentes : [{montant, dans_solde}]
 // budgets    : [{categorie_id, montant}]      depenses    : [{categorie_id, membre_id, montant, date, cree_le}]
 // versements : [{montant, dans_solde}]
-// depensesAvant : dépenses datées d'avant le 1er du mois (mois ouvert en avance), même forme que depenses.
 // Une dépense est déjà déduite si son payeur a saisi un solde et qu'elle date d'avant ce solde, ou du même jour
-// et enregistrée avant lui (solde_a). Une dépense d'avant le 1er faite après le solde en sort encore.
+// et enregistrée avant lui (solde_a). Un mois commence au plus ancien solde saisi (periodeMois) : une dépense de l'autre
+// faite entre ce solde et le sien compte dans le mois, mais est déjà dans son solde.
 // Sans aucun solde saisi, les cases « déjà passé sur le compte » des revenus, charges et versements sont ignorées.
 // Une dépense est déjà dans le solde de son payeur si elle date d'avant ce solde, ou du même jour et enregistrée avant lui
 function deductions(membres) {
@@ -126,16 +171,13 @@ function deductions(membres) {
     if (d.date !== m.solde_le) return d.date < m.solde_le;
     return Boolean(m.solde_a && d.cree_le && new Date(d.cree_le) <= new Date(m.solde_a));
   };
-  return {soldes, dejaDeduite};
+  return {dejaDeduite};
 }
 
-export function syntheseMois({membres = [], revenus = [], recurrentes = [], budgets = [], depenses = [], versements = [],
-  depensesAvant = []}) {
+export function syntheseMois({membres = [], revenus = [], recurrentes = [], budgets = [], depenses = [], versements = []}) {
   const avecSolde = membres.some((m) => m.solde != null);
-  const {soldes, dejaDeduite} = deductions(membres);
-  const depensesDepuisSolde = somme(depensesAvant.filter((d) => soldes.has(d.membre_id) && !dejaDeduite(d))
-    .map((d) => d.montant));
-  const comptes = arrondi(somme(membres.map((m) => m.solde)) - depensesDepuisSolde);
+  const {dejaDeduite} = deductions(membres);
+  const comptes = arrondi(somme(membres.map((m) => m.solde)));
 
   const salaireAVenir = (m) => (m.salaire_dans_solde && m.solde != null ? 0 : Number(m.salaire) || 0);
   const salaires = somme(membres.map((m) => m.salaire));
@@ -166,7 +208,7 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
   const disponible = arrondi(comptes + salairesARecevoir + revenusARecevoir);
   const resteLibre = arrondi(disponible - chargesAPrelever - budgetsAVenir - objectifsAVenir);
   return {
-    comptes, depensesDepuisSolde, salaires, salairesARecevoir, autresRevenus, revenusARecevoir, disponible,
+    comptes, salaires, salairesARecevoir, autresRevenus, revenusARecevoir, disponible,
     chargesFixes, chargesAPrelever,
     budgets: budgetsTotal, budgetsPrevus, depensesDeduites, budgetsAVenir,
     objectifs, objectifsAVenir, resteLibre,
@@ -180,10 +222,9 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
 // Charges perso et dépenses ne pèsent que sur leur payeur ; un versement commun (membre_id null) est partagé.
 // Les budgets non encore dépensés restent au niveau du foyer : on ne sait pas encore qui paiera.
 // membres : membresMois des membres actifs (même forme que syntheseMois) ; ids : identifiants des membres actifs.
-export function colonnesMembres({membres = [], ids = [], revenus = [], recurrentes = [], depenses = [], versements = [],
-  depensesAvant = []}) {
+export function colonnesMembres({membres = [], ids = [], revenus = [], recurrentes = [], depenses = [], versements = []}) {
   const avecSolde = membres.some((m) => m.solde != null);
-  const {soldes, dejaDeduite} = deductions(membres);
+  const {dejaDeduite} = deductions(membres);
   const parts = Math.max(1, ids.length);
   const aSortir = (x) => !(avecSolde && x.dans_solde);
   const commun = (x) => !ids.includes(x.membre_id);
@@ -195,14 +236,13 @@ export function colonnesMembres({membres = [], ids = [], revenus = [], recurrent
     const m = membres.find((x) => x.membre_id === id);
     const siens = (liste) => liste.filter((x) => x.membre_id === id);
     const solde = m?.solde == null ? null : Number(m.solde);
-    const depensesDepuisSolde = soldes.has(id) ? somme(siens(depensesAvant).filter((d) => !dejaDeduite(d)).map((d) => d.montant)) : 0;
     const salaireARecevoir = m && !(m.salaire_dans_solde && m.solde != null) ? Number(m.salaire) || 0 : 0;
     const revenusARecevoir = arrondi(somme(siens(revenus).filter(aSortir).map((r) => r.montant)) + revenusCommuns);
     const chargesPerso = somme(siens(recurrentes).filter(aSortir).map((r) => r.montant));
     const depensesPayees = somme(siens(depenses).filter((d) => !dejaDeduite(d)).map((d) => d.montant));
     const objectifs = arrondi(somme(siens(versements).filter(aSortir).map((v) => v.montant)) + versementsCommuns);
-    const reste = arrondi((solde ?? 0) - depensesDepuisSolde + salaireARecevoir + revenusARecevoir - communes - chargesPerso - depensesPayees - objectifs);
-    return {membre_id: id, renseigne: Boolean(m?.renseigne), solde, depensesDepuisSolde, salaireARecevoir, revenusARecevoir,
+    const reste = arrondi((solde ?? 0) + salaireARecevoir + revenusARecevoir - communes - chargesPerso - depensesPayees - objectifs);
+    return {membre_id: id, renseigne: Boolean(m?.renseigne), solde, salaireARecevoir, revenusARecevoir,
       communes, chargesPerso, depensesPayees, objectifs, reste};
   });
 }

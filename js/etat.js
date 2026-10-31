@@ -9,7 +9,7 @@ export const etat = {
   anciensMembres: [],   // retirés du foyer (prénom des dépenses passées)
   moi: null,
   moisCle: null,          // mois affiché
-  moisCourantCle: null,   // mois calendaire
+  moisCourantCle: null,   // mois en cours : le dernier ouvert (calc.moisActif)
   donnees: null,
 };
 

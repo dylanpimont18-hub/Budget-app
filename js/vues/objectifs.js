@@ -25,7 +25,7 @@ function resteLibreDuMois() {
   if (!d?.mois || !estMoisCourant()) return null;
   if (etat.membres.some((m) => !d.membresMois.find((x) => x.membre_id === m.id)?.renseigne)) return null;
   return syntheseMois({membres: d.membresMois, revenus: d.revenus, recurrentes: d.recurrentes, budgets: d.budgets,
-    depenses: d.depenses, versements: d.versements, depensesAvant: d.depensesAvant}).resteLibre;
+    depenses: d.depenses, versements: d.versements}).resteLibre;
 }
 
 const NIVEAUX = {realisable: ['ok', 'Réalisable'], serre: ['alerte', 'Serré'], difficile: ['depasse', 'Difficile']};

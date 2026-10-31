@@ -42,15 +42,18 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - formatEUR(n, {signe, entier}) — formate en euros fr-FR
 - de(prenom) — « de Dylan » / « d'Amel »
 - cleMois(date) — clé 'YYYY-MM' en heure locale
-- moisActif(disponibles, date) / peutOuvrirEnAvance(date) — mois en cours : le suivant s'il a été ouvert en avance (possible dès le 20)
+- moisActif(disponibles, date) — mois en cours : le dernier ouvert (le nouveau commence à la saisie du solde), sauf après plus d'un mois sans ouverture
+- peutOuvrirEnAvance(date) / proposerMoisSuivant(courant, date) — ouvrir le suivant : proposé dès le 20, pressant une fois le mois passé
+- debutMois(cle, parts) / periodeMois(cle, parts, partsSuivant) — période d'un mois : du plus ancien solde (au plus tard le 1er) à l'ouverture du suivant
+- moisDeLaDate(date, periodes) / periodeEnClair(cle, periode) — mois d'une dépense datée ; « depuis le 27 oct. »
 - decalerMois(cle, n) — avance ou recule de n mois
 - nbMois(debut, fin) — nombre de mois, bornes incluses
 - libelleMois(cle) — « octobre 2026 »
 - niveauBudget(budget, depense) — vide / ok / alerte / dépassé
 - statutRecurrente(r) / etatRecurrentes(recurrentes) — charge déjà prélevée, à prélever ou à confirmer ; totaux par statut
 - resumeBudgets(lignes) — prévu, dépensé, reste, niveau global et nombre de catégories par niveau
-- syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements, depensesAvant}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits, dépenses d'avant le 1er après le solde)
-- colonnesMembres({membres, ids, revenus, recurrentes, depenses, versements, depensesAvant}) — reste de chacun : solde, salaire et revenus à venir (communs partagés), part des communes (compte joint), charges perso, dépenses payées, objectifs
+- syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits)
+- colonnesMembres({membres, ids, revenus, recurrentes, depenses, versements}) — reste de chacun : solde, salaire et revenus à venir (communs partagés), part des communes (compte joint), charges perso, dépenses payées, objectifs
 - virementCommun({ids, recurrentes, revenus}) — à virer chacun sur le compte commun : (charges communes − revenus communs) / n
 - bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
 - depensesParCategorie(depenses) — total et part par membre
@@ -83,8 +86,8 @@ Client Supabase et toutes les requêtes ; lève des erreurs en français.
 - chargerFoyer() — foyer, membres actifs, anciens membres (retirés) et membre courant
 - creerFoyer(prenom) / rejoindreFoyer(code, prenom) — RPC foyer
 - regenererCode() / retirerMembre(membreId) — nouveau code d'invitation, couper l'accès d'un membre
-- chargerMois(foyerId, cle) — mois, revenus, récurrentes, budgets, dépenses, versements, dépenses d'avant le 1er après un solde
-- chargerPlage(foyerId, debut, fin) — mois ouverts d'une période (+ référence), paginé
+- chargerMois(foyerId, cle) — mois, période, revenus, récurrentes, budgets, dépenses de la période, versements
+- chargerPlage(foyerId, debut, fin) — mois ouverts d'une période (+ référence), dépenses rangées par période, paginé
 - listerMois(foyerId) — clés des mois ouverts, décroissantes
 - chargerCategories(foyerId) — catégories actives et inactives
 - chargerObjectifs(foyerId) — objectifs et tous les versements
@@ -132,7 +135,7 @@ Démarrage et routage : connexion → foyer → ouverture du mois → onglets ; 
 `body[data-onglet]` = onglet actif ; sous 1024 px, Rapports bascule sur Budget ; le focus survit aux re-rendus.
 - afficherOnglet(nom, options) — affiche un onglet
 - seDeconnecter() — déconnexion avec message d'erreur
-- ouvrirMoisSuivant() — ouverture en avance du mois suivant (paye reçue avant le 1er)
+- ouvrirMoisSuivant() — ouvre le mois qui suit le mois en cours (paye reçue : il commence à ce solde)
 
 ## js/vues/connexion.js
 Connexion / inscription, création ou adhésion au foyer.
@@ -154,7 +157,7 @@ Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue p
 ## js/vues/depenses.js
 Onglet Dépenses, historique mensuel, formulaire de dépense partagé ; sur ordinateur, tableau + panneau de saisie et budgets.
 - formulaireDepense({depense, onValider, prefixe}) — saisie / modification d'une dépense
-- selecteurMois() — navigation ‹ mois › entre mois ouverts
+- selecteurMois() — navigation ‹ mois › entre mois ouverts, période sous le titre (« depuis le 27 oct. »)
 - rendreDepenses(conteneur) — « Par personne » en tête, puis journal par date ou catégorie (tableau sur ordinateur)
 - categorieDe(id) / aujourdhui() — utilitaires partagés
 
@@ -170,7 +173,7 @@ Colonnes « Par personne » de l'onglet Dépenses (calc.colonnesMembres) : avata
 Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, graphiques SVG.
 Exporte `COULEURS` et `GRIS_AUTRES` (couleurs des graphiques, réutilisées par les rapports).
 - rendreTableau(conteneur) — tableau de bord du mois affiché
-- bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?, ouvrir le mois suivant en avance
+- bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?, ouvrir le mois suivant (dès le 20, ou une fois le mois passé)
 - bilan() — bilan d'un mois passé (remplace la prévision)
 - blocFoyer() — code d'invitation (tant que le foyer attend son 2e membre), changer le code, retirer un membre
 

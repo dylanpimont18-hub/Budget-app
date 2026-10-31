@@ -164,9 +164,9 @@ async function lancer() {
   }
 }
 
-// Paye reçue avant le 1er : on ouvre le mois suivant sans attendre (ou on y passe s'il l'est déjà)
+// Paye reçue : le mois suivant commence à la saisie du solde (ou on y passe s'il est déjà ouvert)
 export function ouvrirMoisSuivant() {
-  const suivant = decalerMois(moisCalendaire, 1);
+  const suivant = decalerMois(etat.moisCourantCle, 1);
   if (etat.donnees.moisDisponibles.includes(suivant)) {
     demarrer();
     return;
@@ -187,7 +187,8 @@ surAuth((evenement) => {
 });
 
 // Au retour au premier plan (iPhone), on resynchronise : le temps réel a pu être coupé.
-// Si le mois calendaire a changé pendant que l'app dormait, on repart du début (ouverture du nouveau mois).
+// Si le mois calendaire a changé pendant que l'app dormait, on repart du début : le mois en cours reste le dernier
+// ouvert (le nouveau commence à la saisie du solde), sauf après plus d'un mois sans ouverture.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !etat.foyer || !etat.donnees) return;
   if (cleMois() !== moisCalendaire) demarrer();

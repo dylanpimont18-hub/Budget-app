@@ -124,11 +124,20 @@ button { cursor: pointer; }
     gap: 8px;
     margin-bottom: 12px;
 }
+.selecteur-mois .titre-mois {
+    flex: 1;
+    text-align: center;
+}
 .selecteur-mois h1 {
     margin: 0;
     font-size: 1.35rem;
     text-align: center;
     flex: 1;
+}
+.periode-mois {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: var(--attenue);
 }
 .selecteur-mois h1::first-letter { text-transform: uppercase; }
 

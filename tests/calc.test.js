@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseMontant, formatEUR, cleMois, decalerMois, nbMois, moisActif, peutOuvrirEnAvance, libelleMois, niveauBudget,
+  parseMontant, formatEUR, cleMois, decalerMois, nbMois, moisActif, peutOuvrirEnAvance, proposerMoisSuivant,
+  debutMois, periodeMois, moisDeLaDate, periodeEnClair, libelleMois, niveauBudget,
   statutRecurrente, etatRecurrentes, resumeBudgets, colonnesMembres, faisabiliteObjectif, virementCommun,
   syntheseMois, bilanMois, depensesParCategorie, totalParMembre, topPostes,
   effortMensuel, cibleDepuisMensuel, suiviObjectif, de,
@@ -326,14 +327,48 @@ test('projectionObjectif : objectif récent, aucun mois terminé, rythme nul, at
   assert.equal(projectionObjectif(VACANCES, [vers('v', '2026-05', 3000)], '2026-10').statut, 'atteint');
 });
 
-test('moisActif : le mois suivant dès qu\'il est ouvert en avance', () => {
+test('moisActif : le mois commence à son ouverture, pas le 1er', () => {
   const le28 = new Date(2026, 9, 28);
   assert.equal(moisActif(['2026-10', '2026-09'], le28), '2026-10');
   assert.equal(moisActif(['2026-11', '2026-10'], le28), '2026-11');
   assert.equal(moisActif([], le28), '2026-10');
   assert.equal(moisActif(['2027-01'], new Date(2026, 11, 30)), '2027-01');
+  // Le 2 novembre, novembre pas encore ouvert : on reste sur octobre
+  assert.equal(moisActif(['2026-10', '2026-09'], new Date(2026, 10, 2)), '2026-10');
+  // Plus d'un mois sans ouverture : le mois calendaire, à ouvrir
+  assert.equal(moisActif(['2026-09'], new Date(2026, 10, 2)), '2026-11');
+  // Un mois ouvert trop loin en avance ne compte pas
+  assert.equal(moisActif(['2027-02', '2026-10'], le28), '2026-10');
   assert.equal(peutOuvrirEnAvance(le28), true);
   assert.equal(peutOuvrirEnAvance(new Date(2026, 9, 5)), false);
+});
+
+test('proposerMoisSuivant : dès le 20, ou tout de suite si le mois est passé', () => {
+  assert.equal(proposerMoisSuivant('2026-10', new Date(2026, 9, 5)), false);
+  assert.equal(proposerMoisSuivant('2026-10', new Date(2026, 9, 25)), true);
+  assert.equal(proposerMoisSuivant('2026-10', new Date(2026, 10, 2)), true);
+  assert.equal(proposerMoisSuivant('2026-11', new Date(2026, 9, 28)), false);   // déjà ouvert en avance
+});
+
+test('periodeMois : du plus ancien solde au début du mois suivant', () => {
+  // Ouvert le 27 octobre (paye de fin de mois), part de l'autre remplie le 2
+  const novembre = [{solde_le: '2026-10-27'}, {solde_le: '2026-11-02'}];
+  assert.equal(debutMois('2026-11', novembre), '2026-10-27');
+  assert.equal(debutMois('2026-11', []), '2026-11-01');
+  assert.equal(debutMois('2026-11', [{solde_le: '2026-11-03'}, {solde_le: null}]), '2026-11-01');   // au plus tard le 1er
+  assert.deepEqual(periodeMois('2026-10', [{solde_le: '2026-09-26'}], novembre), {debut: '2026-09-26', fin: '2026-10-27', close: true});
+  // Suivant pas encore ouvert : jusqu'au 1er du mois d'après
+  assert.deepEqual(periodeMois('2026-11', novembre, null), {debut: '2026-10-27', fin: '2027-01-01', close: false});
+  const periodes = [{cle: '2026-10', debut: '2026-09-26', fin: '2026-10-27'}, {cle: '2026-11', debut: '2026-10-27', fin: '2027-01-01'}];
+  assert.equal(moisDeLaDate('2026-10-26', periodes), '2026-10');
+  assert.equal(moisDeLaDate('2026-10-27', periodes), '2026-11');
+  assert.equal(moisDeLaDate('2026-09-20', periodes), null);
+  const clair = (t) => t.replace(/\u202f|\u00a0/g, ' ');
+  assert.equal(clair(periodeEnClair('2026-11', periodeMois('2026-11', novembre))), 'depuis le 27 oct.');
+  assert.equal(clair(periodeEnClair('2026-10', periodeMois('2026-10', [{solde_le: '2026-09-26'}], novembre))),
+    'du 26 sept. au 26 oct.');
+  assert.equal(periodeEnClair('2026-11', periodeMois('2026-11', [])), null);
+  assert.equal(periodeEnClair('2026-10', periodeMois('2026-10', [], [])), null);
 });
 
 test('syntheseMois : dépense du jour du solde, enregistrée avant ou après lui', () => {
@@ -359,23 +394,6 @@ test('syntheseMois : versement déjà fait avant le solde', () => {
   // Sans solde, la case est ignorée
   assert.equal(syntheseMois({versements: [{montant: 100, dans_solde: true}]}).objectifsAVenir, 100);
 });
-test('syntheseMois : mois ouvert en avance, dépenses de fin de mois précédent faites après le solde', () => {
-  const s = syntheseMois({
-    membres: [{membre_id: 'D', salaire: 0, solde: 1800, solde_le: '2026-10-28', solde_a: '2026-10-28T18:00:00Z',
-      salaire_dans_solde: true}, {membre_id: 'A', salaire: 0, solde: null}],
-    depensesAvant: [
-      {membre_id: 'D', montant: 30, date: '2026-10-27', cree_le: '2026-10-27T10:00:00Z'},   // avant le solde
-      {membre_id: 'D', montant: 40, date: '2026-10-28', cree_le: '2026-10-28T10:00:00Z'},   // le jour, avant
-      {membre_id: 'D', montant: 50, date: '2026-10-28', cree_le: '2026-10-28T20:00:00Z'},   // le jour, après
-      {membre_id: 'D', montant: 60, date: '2026-10-30', cree_le: '2026-10-30T10:00:00Z'},   // après
-      {membre_id: 'A', montant: 70, date: '2026-10-30', cree_le: '2026-10-30T10:00:00Z'},   // A sans solde
-    ],
-  });
-  assert.equal(s.depensesDepuisSolde, 110);
-  assert.equal(s.comptes, 1690);
-  assert.equal(s.disponible, 1690);
-});
-
 test('colonnesMembres : communes partagées, perso et dépenses au payeur, rien de déjà dans le solde', () => {
   const [a, b] = colonnesMembres({
     ids: ['a', 'b'],
@@ -397,7 +415,7 @@ test('colonnesMembres : communes partagées, perso et dépenses au payeur, rien 
     versements: [{montant: 200, membre_id: null}, {montant: 50, membre_id: 'b'}],
     revenus: [{montant: 300, membre_id: null}, {montant: 150, membre_id: 'a'}, {montant: 40, membre_id: 'b', dans_solde: true}],
   });
-  assert.deepEqual(a, {membre_id: 'a', renseigne: true, solde: 2500, depensesDepuisSolde: 0, salaireARecevoir: 0,
+  assert.deepEqual(a, {membre_id: 'a', renseigne: true, solde: 2500, salaireARecevoir: 0,
     revenusARecevoir: 300, communes: 500, chargesPerso: 30, depensesPayees: 80, objectifs: 100, reste: 2090});
   assert.equal(b.revenusARecevoir, 150);   // moitié de la CAF ; sa prime est déjà dans son solde
   assert.equal(b.salaireARecevoir, 1800);

@@ -55,8 +55,11 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
   starting point; add only what is not in it yet (salary unless `salaire_dans_solde`, other income unless
   `revenus_mois.dans_solde`), subtract only what has not left yet (charges unless `recurrentes_mois.dans_solde`,
   max(budget, spent) minus the payer's expenses already in the balance — dated before `solde_le`, or that day and created
-  before `solde_a` —, goal transfers unless `versements.dans_solde`; a month opened early also loses the expenses made
-  between the balance and the 1st). `salaire_recu` is display only.
+  before `solde_a` —, goal transfers unless `versements.dans_solde`). `salaire_recu` is display only.
+- A month starts when it is opened, not on the 1st: its period (`periodeMois` in `calc.js`) runs from its earliest
+  `solde_le` (at the latest the 1st) to the start of the next opened month, and expenses are filed by date in it
+  (`chargerMois`, `chargerPlage`). The current month (`moisActif`) is the last opened one; the next is offered from the
+  20th and urged once the calendar month is over, never forced (unless more than a month has gone by).
 - Recurring charges can be personal (`membre_id`, null = shared) and variable (`variable`: each new month copies the
   last amount with `a_confirmer = true` until it is entered).
 - Each member fills in their own part of the month (`mois_membres.renseigne`), or the other can fill it in for them

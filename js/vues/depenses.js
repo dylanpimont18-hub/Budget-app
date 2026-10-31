@@ -2,7 +2,7 @@
 // Contient aussi le formulaire de dépense, réutilisé par l'ajout rapide.
 import {ajouterDepense, modifierDepense, supprimerDepense} from '../db.js';
 import {etat, changerMois, recharger, notifier} from '../etat.js';
-import {formatEUR, libelleMois, niveauBudget, depensesParCategorie} from '../calc.js';
+import {formatEUR, libelleMois, periodeEnClair, niveauBudget, depensesParCategorie} from '../calc.js';
 import {el, ouvrirFeuille, toast, champMontant, estOrdinateur} from '../ui.js';
 import {blocParPersonne} from './par-personne.js';
 
@@ -124,7 +124,8 @@ export function selecteurMois() {
   return el('div', {class: 'selecteur-mois'},
     el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Mois précédent', disabled: idx >= mois.length - 1,
       onclick: () => naviguer(mois[idx + 1])}, '‹'),
-    el('h1', {}, libelleMois(cle)),
+    el('div', {class: 'titre-mois'}, el('h1', {}, libelleMois(cle)),
+      periodeEnClair(cle, etat.donnees.periode) ? el('p', {class: 'periode-mois'}, periodeEnClair(cle, etat.donnees.periode)) : null),
     el('button', {class: 'btn-icone', type: 'button', 'aria-label': 'Mois suivant', disabled: idx <= 0,
       onclick: () => naviguer(mois[idx - 1])}, '›'));
 }

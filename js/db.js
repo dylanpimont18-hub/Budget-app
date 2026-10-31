@@ -1,7 +1,7 @@
 // Accès aux données : client Supabase et toutes les requêtes de l'app.
 // Chaque fonction lève une Error au message en français si Supabase renvoie une erreur.
 import {SUPABASE_URL, SUPABASE_ANON_KEY} from './config.js';
-import {decalerMois} from './calc.js';
+import {decalerMois, periodeMois, moisDeLaDate} from './calc.js';
 
 // supabase-js est chargé par index.html (js/vendor/supabase.js), servi par le site lui-même
 export const sb = globalThis.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -144,31 +144,35 @@ export async function retirerMembre(membreId) {
 
 // ── Données du mois ────────────────────────────────────────────────────
 
+// Un mois va de son ouverture (plus ancien solde saisi, au plus tard le 1er) à l'ouverture du suivant :
+// les dépenses sont rangées par date dans cette période (calc.periodeMois). periode : {debut, fin} (fin exclue).
 export async function chargerMois(foyerId, cle) {
-  const [mois, depenses, versements] = await Promise.all([
-    sb.from('mois').select('id, cle').eq('foyer_id', foyerId).eq('cle', cle).maybeSingle(),
-    sb.from('depenses').select('id, date, montant, categorie_id, membre_id, libelle, cree_le')
-      .eq('foyer_id', foyerId).gte('date', `${cle}-01`).lt('date', `${decalerMois(cle, 1)}-01`)
-      .order('date', {ascending: false}).order('cree_le', {ascending: false}),
+  const message = 'Impossible de charger le mois.';
+  const [lignesMois, versements] = await Promise.all([
+    sb.from('mois').select('id, cle').eq('foyer_id', foyerId).in('cle', [cle, decalerMois(cle, 1)]),
     sb.from('versements').select('id, objectif_id, mois_cle, montant, membre_id, dans_solde')
       .eq('foyer_id', foyerId).eq('mois_cle', cle).order('cree_le'),
   ]);
+  const tous = verifier(lignesMois, message);
+  const mois = tous.find((m) => m.cle === cle) ?? null;
+  const suivant = tous.find((m) => m.cle !== cle) ?? null;
   const donnees = {
-    mois: verifier(mois, 'Impossible de charger le mois.'),
+    mois,
+    periode: periodeMois(cle),
     membresMois: [],
     revenus: [],
     recurrentes: [],
     budgets: [],
-    depenses: verifier(depenses, 'Impossible de charger les dépenses.'),
-    depensesAvant: [],
+    depenses: [],
     versements: verifier(versements, 'Impossible de charger les versements.'),
   };
-  if (!donnees.mois) return donnees;
+  if (!mois) return donnees;
 
-  const id = donnees.mois.id;
-  const [membresMois, revenus, recurrentes, budgets] = await Promise.all([
+  const id = mois.id;
+  const [membresMois, partsSuivant, revenus, recurrentes, budgets] = await Promise.all([
     sb.from('mois_membres')
       .select('membre_id, salaire, solde, solde_le, solde_a, salaire_dans_solde, salaire_recu, renseigne').eq('mois_id', id),
+    suivant ? sb.from('mois_membres').select('solde_le').eq('mois_id', suivant.id) : null,
     sb.from('revenus_mois').select('id, libelle, montant, dans_solde, membre_id').eq('mois_id', id).order('libelle'),
     sb.from('recurrentes_mois')
       .select('id, recurrente_id, libelle, icone, montant, ordre, dans_solde, variable, a_confirmer, membre_id').eq('mois_id', id)
@@ -179,13 +183,11 @@ export async function chargerMois(foyerId, cle) {
   donnees.revenus = verifier(revenus, 'Impossible de charger les revenus.');
   donnees.recurrentes = verifier(recurrentes, 'Impossible de charger les charges fixes.');
   donnees.budgets = verifier(budgets, 'Impossible de charger les budgets.');
+  donnees.periode = periodeMois(cle, donnees.membresMois, suivant ? verifier(partsSuivant, message) : null);
 
-  // Mois ouvert en avance : les dépenses faites entre le solde et le 1er du mois sont aussi sorties du compte
-  const debut = donnees.membresMois.map((m) => m.solde_le).filter((d) => d && d < `${cle}-01`).sort()[0];
-  if (debut) {
-    donnees.depensesAvant = verifier(await sb.from('depenses').select('id, date, montant, categorie_id, membre_id, cree_le')
-      .eq('foyer_id', foyerId).gte('date', debut).lt('date', `${cle}-01`), 'Impossible de charger les dépenses.');
-  }
+  donnees.depenses = verifier(await sb.from('depenses').select('id, date, montant, categorie_id, membre_id, libelle, cree_le')
+    .eq('foyer_id', foyerId).gte('date', donnees.periode.debut).lt('date', donnees.periode.fin)
+    .order('date', {ascending: false}).order('cree_le', {ascending: false}), 'Impossible de charger les dépenses.');
   return donnees;
 }
 
@@ -206,24 +208,34 @@ async function toutesLesLignes(requete, message, cle = (l) => l.id) {
 // Une requête par table pour toute la plage. Renvoie {parMois: {cle: {cle, mois, membresMois, revenus,
 // recurrentes, depenses, versements}}, reference: cle | null} ; seuls les mois ouverts y figurent.
 export async function chargerPlage(foyerId, debut, fin) {
-  const tous = verifier(await sb.from('mois').select('id, cle').eq('foyer_id', foyerId).lte('cle', fin)
+  const tous = verifier(await sb.from('mois').select('id, cle').eq('foyer_id', foyerId).lte('cle', decalerMois(fin, 1))
     .order('cle', {ascending: false}), 'Impossible de charger les mois du rapport.');
   const reference = tous.find((m) => m.cle < debut) ?? null;
-  const retenus = tous.filter((m) => m.cle >= debut || m === reference);
+  const retenus = tous.filter((m) => (m.cle >= debut && m.cle <= fin) || m === reference);
   if (!retenus.length) return {parMois: {}, reference: null};
+  // Le mois qui suit la plage, s'il est ouvert, borne la période du dernier
+  const apres = tous.find((m) => m.cle === decalerMois(fin, 1));
 
   const ids = retenus.map((m) => m.id);
   const premier = retenus.at(-1).cle;
   const message = 'Impossible de charger les données du rapport.';
-  const [membresMois, revenus, recurrentes, depenses, versements] = await Promise.all([
-    toutesLesLignes(() => sb.from('mois_membres').select('mois_id, membre_id, salaire').in('mois_id', ids)
-      .order('mois_id').order('membre_id'), message, (l) => `${l.mois_id}:${l.membre_id}`),
+  const parts = await toutesLesLignes(() => sb.from('mois_membres').select('mois_id, membre_id, salaire, solde_le')
+    .in('mois_id', [...ids, apres?.id].filter(Boolean)).order('mois_id').order('membre_id'), message, (l) => `${l.mois_id}:${l.membre_id}`);
+  const partsDe = (m) => parts.filter((l) => l.mois_id === m.id);
+  const parCle = new Map(tous.map((m) => [m.cle, m]));
+  const periodes = retenus.map((m) => {
+    const suivant = parCle.get(decalerMois(m.cle, 1));
+    return {cle: m.cle, ...periodeMois(m.cle, partsDe(m), suivant ? partsDe(suivant) : null)};
+  });
+  const debutDates = periodes.map((p) => p.debut).sort()[0];
+  const finDates = periodes.map((p) => p.fin).sort().at(-1);
+  const [revenus, recurrentes, depenses, versements] = await Promise.all([
     toutesLesLignes(() => sb.from('revenus_mois').select('id, mois_id, libelle, montant').in('mois_id', ids).order('id'), message),
     toutesLesLignes(() => sb.from('recurrentes_mois')
       .select('id, mois_id, recurrente_id, libelle, icone, montant, variable, a_confirmer, membre_id').in('mois_id', ids)
       .order('id'), message),
     toutesLesLignes(() => sb.from('depenses').select('id, date, montant, categorie_id, membre_id')
-      .eq('foyer_id', foyerId).gte('date', `${premier}-01`).lt('date', `${decalerMois(fin, 1)}-01`).order('id'), message),
+      .eq('foyer_id', foyerId).gte('date', debutDates).lt('date', finDates).order('id'), message),
     toutesLesLignes(() => sb.from('versements').select('id, objectif_id, mois_cle, montant')
       .eq('foyer_id', foyerId).gte('mois_cle', premier).lte('mois_cle', fin).order('id'), message),
   ]);
@@ -236,10 +248,10 @@ export async function chargerPlage(foyerId, debut, fin) {
   const ranger = (lignes, champ, cle) => {
     for (const l of lignes) parMois[cle(l)]?.[champ].push(l);
   };
-  ranger(membresMois, 'membresMois', (l) => cleDe.get(l.mois_id));
+  ranger(parts, 'membresMois', (l) => cleDe.get(l.mois_id));
   ranger(revenus, 'revenus', (l) => cleDe.get(l.mois_id));
   ranger(recurrentes, 'recurrentes', (l) => cleDe.get(l.mois_id));
-  ranger(depenses, 'depenses', (l) => l.date.slice(0, 7));     // dépenses d'un mois non ouvert : ignorées
+  ranger(depenses, 'depenses', (l) => moisDeLaDate(l.date, periodes));   // avant le premier mois ouvert : ignorées
   ranger(versements, 'versements', (l) => l.mois_cle);
   return {parMois, reference: reference?.cle ?? null};
 }
