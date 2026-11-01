@@ -27,8 +27,10 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
 - `js/calc.js` — pure calculations (amounts, months, budget summary, goals). No DOM, no network. Tested.
 - `js/db.js` — the only module that talks to Supabase; throws `Error`s with French messages.
 - `js/etat.js` — store: `etat`, `abonner`/`notifier`, `recharger()` (ignores stale responses), Realtime with a 300 ms debounce.
-- `js/app.js` — routing: login → household → month opening → tabs (Récurrentes, Dépenses, Budget, Objectifs, and
-  Rapports on desktop only).
+- `js/app.js` — routing: login → household → month opening → tabs (Accueil, Dépenses, Objectifs, and Rapports on
+  desktop only). Récurrentes (« Charges fixes ») has no tab: it opens from a line on Accueil.
+- Keep screens light: one key figure visible, details and charts in `repliable()` sections (`js/ui.js`), closed by
+  default.
 - `js/vues/*.js` — one module per screen; each tab re-renders on every `notifier()`.
 - `js/vues/rapports.js` — loads its own range of months with `db.chargerPlage` (never touches `recharger()` or
   `etat.moisCle`), ignores stale responses and reloads on `surTempsReel`. Figures are assembled by the pure
@@ -46,7 +48,7 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
 - Smartphone first: works at 375 px with no horizontal scroll, touch targets ≥ 44 px, respect `env(safe-area-inset-*)`.
 - Desktop is `@media (min-width: 1024px)` only (same threshold as `estOrdinateur()` in `ui.js`): side menu, centred
   sheets, `.grille-ordinateur` two columns. Below it the phone layout must stay pixel-identical. The Rapports tab
-  exists only on desktop; the app falls back to Budget below 1024 px (but not while printing).
+  exists only on desktop; the app falls back to Accueil below 1024 px (but not while printing).
 - Only the public (anon) Supabase key may appear in code; never a service key. The repository is public: no personal
   data (salaries, loans, real charges) in code, migrations or tests.
 - A household has at most two active members; a removed member keeps `membres` row with `user_id = null`

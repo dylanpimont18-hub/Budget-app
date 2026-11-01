@@ -1,10 +1,11 @@
-// Onglet Récurrentes : charges fixes du mois (communes ou personnelles, montant fixe ou variable)
+// Écran Charges fixes (ouvert depuis l'Accueil) : charges fixes du mois (communes ou personnelles, montant fixe ou variable)
 // et revue de début de mois par swipe, où l'on saisit aussi le montant des charges variables.
 import {ajouterRecurrente, modifierRecurrente, confirmerMontant, retirerDuMois, restaurerDansMois, supprimerRecurrente}
   from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
 import {formatEUR, libelleMois, statutRecurrente, etatRecurrentes} from '../calc.js';
 import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
+import {afficherOnglet} from '../app.js';
 
 const ICONES = ['🏡', '🏦', '⚡', '💧', '🛡️', '📱', '👶', '🍽️', '🧾', '🚗', '💡', '📺', '🏋️', '🐾', '💳', '📦'];
 const SEUIL_SWIPE = 100;
@@ -17,7 +18,7 @@ const prenomDe = (id) => (etat.membres.find((m) => m.id === id) ?? etat.anciensM
 export function rendreRecurrentes(conteneur, {revue: demarrerRevue = false} = {}) {
   const donnees = etat.donnees;
   if (!donnees?.mois) {
-    conteneur.append(el('h1', {}, 'Récurrentes'), el('p', {class: 'vide-liste'}, 'Ce mois n\'a pas été ouvert.'));
+    conteneur.append(retour(), el('h1', {}, 'Charges fixes'), el('p', {class: 'vide-liste'}, 'Ce mois n\'a pas été ouvert.'));
     return;
   }
   if (demarrerRevue && estMoisCourant()) commencerRevue();
@@ -26,6 +27,9 @@ export function rendreRecurrentes(conteneur, {revue: demarrerRevue = false} = {}
   if (revue) rendreRevue(conteneur);
   else rendreListe(conteneur);
 }
+
+const retour = () => el('button', {class: 'btn-texte btn-retour', type: 'button', onclick: () => afficherOnglet('tableau')},
+  '‹ Accueil');
 
 // Pendant la revue, le bouton « + » flottant masquerait « Terminer »
 const boutonAjout = (visible) => {
@@ -60,10 +64,11 @@ function rendreListe(conteneur) {
   };
 
   ajouter(conteneur, [
+    retour(),
     el('div', {class: 'entete-vue'},
-      el('h1', {}, 'Récurrentes'),
+      el('h1', {}, 'Charges fixes'),
       el('span', {class: 'total-entete montant'}, formatEUR(total))),
-    el('p', {class: 'attenue'}, `Charges fixes · ${libelleMois(etat.moisCle)}`,
+    el('p', {class: 'attenue'}, libelleMois(etat.moisCle),
       moisPasse ? ' · mois passé : tes corrections ne changent que ce mois' : ''),
     recurrentes.length ? el('div', {class: 'carte'}, repartitionCharges(etatRecurrentes(recurrentes))) : null,
     groupes.length

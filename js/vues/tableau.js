@@ -1,15 +1,16 @@
-// Onglet Budget (tableau de bord) : prévision du mois, budgets par catégorie, par personne, graphiques.
+// Onglet Accueil : le reste libre, les charges fixes en une ligne, les budgets par catégorie.
+// Le détail (disponible, charges, objectifs) et les graphiques sont repliés sous « Voir le détail ».
 // Le solde de chacun est le point de départ : on n'ajoute ou ne retire que ce qui n'y est pas encore (calc.syntheseMois).
 import {modifierBudget, modifierMoisMembre, regenererCode, retirerMembre} from '../db.js';
 import {etat, recharger, estMoisCourant} from '../etat.js';
-import {formatEUR, libelleMois, decalerMois, cleMois, proposerMoisSuivant, syntheseMois, bilanMois, niveauBudget, resumeBudgets, etatRecurrentes, depensesParCategorie, topPostes} from '../calc.js';
-import {el, ajouter, ouvrirFeuille, toast, champMontant} from '../ui.js';
+import {formatEUR, libelleMois, decalerMois, cleMois, proposerMoisSuivant, syntheseMois, bilanMois, niveauBudget, etatRecurrentes, depensesParCategorie, topPostes} from '../calc.js';
+import {el, ajouter, ouvrirFeuille, toast, champMontant, repliable} from '../ui.js';
 import {selecteurMois, categorieDe} from './depenses.js';
 import {editerPart, de} from './part-membre.js';
 import {ouvrirRevenus, ouvrirCategories, ouvrirProfil} from './reglages.js';
 import {ouvrirConfirmation, repartitionCharges} from './recurrentes.js';
 import {copier} from './connexion.js';
-import {seDeconnecter, ouvrirMoisSuivant} from '../app.js';
+import {seDeconnecter, ouvrirMoisSuivant, afficherOnglet} from '../app.js';
 import {VERSION} from '../version.js';
 
 // Teintes de bois et de forêt : noyer, ardoise, miel, prune, mousse
@@ -40,12 +41,29 @@ export function rendreTableau(conteneur) {
 
   // Mois passé : la prévision n'a plus de sens, on montre le bilan
   // Sur ordinateur, les sections se répartissent sur deux colonnes
+  const courant = estMoisCourant();
   ajouter(conteneur, [
     el('div', {class: 'grille-ordinateur'},
-      el('section', {}, estMoisCourant() ? cartes(synthese) : bilan()),
-      el('section', {}, el('h2', {}, 'Budgets par catégorie'), categories()),
-      el('section', {}, el('h2', {}, 'Répartition'), graphiques(synthese, {prevision: estMoisCourant()}))),
+      el('section', {}, courant ? resteLibre(synthese) : bilan(), ligneCharges()),
+      el('section', {}, el('h2', {}, 'Budgets'), categories())),
+    repliable('accueil-detail', 'Voir le détail', el('div', {class: 'grille-ordinateur'},
+      courant ? el('section', {}, cartes(synthese)) : null,
+      el('section', {}, graphiques(synthese, {prevision: courant}))), {classe: 'detail-accueil'}),
     piedDePage()]);
+}
+
+// Les charges fixes n'ont plus d'onglet : une ligne qui ouvre leur écran
+function ligneCharges() {
+  const r = etat.donnees.recurrentes;
+  const e = etatRecurrentes(r);
+  const sous = [e.aConfirmer.nb ? `${e.aConfirmer.nb} à confirmer` : null, e.aPrelever.nb ? `${e.aPrelever.nb} à prélever` : null]
+    .filter(Boolean).join(' · ') || (r.length ? 'Tout est prélevé' : 'Aucune charge');
+  return el('ul', {class: 'liste'}, el('li', {},
+    el('button', {class: 'ligne', type: 'button', onclick: () => afficherOnglet('recurrentes')},
+      el('span', {class: 'ligne-icone', 'aria-hidden': 'true'}, '🔁'),
+      el('span', {class: 'ligne-texte'}, el('div', {class: 'ligne-titre'}, 'Charges fixes'), el('div', {class: 'ligne-sous'}, sous)),
+      el('span', {class: 'ligne-montant montant'}, formatEUR(e.total)),
+      el('span', {class: 'chevron', 'aria-hidden': 'true'}, '›'))));
 }
 
 // ── Bandeaux (mois en cours) ───────────────────────────────────────────
@@ -93,7 +111,11 @@ function bandeaux() {
       el('button', {class: enRetard && !ouvert ? 'btn-primaire' : 'btn-secondaire', type: 'button', onclick: ouvrirMoisSuivant},
         ouvert ? 'Y aller' : `Ouvrir ${suivant}`)));
   }
-  return resultat;
+  // Au plus deux rappels visibles, les autres repliés
+  if (resultat.length <= 2) return resultat;
+  return [...resultat.slice(0, 2),
+    repliable('accueil-rappels', `${resultat.length - 2} autre${resultat.length > 3 ? 's' : ''} rappel${resultat.length > 3 ? 's' : ''}`,
+      resultat.slice(2))];
 }
 
 // Seuls salaire et salaire_recu changent : le salaire reste compté à part du solde, une seule fois
@@ -124,7 +146,26 @@ function confirmerSalaire(membre, mm) {
   champ.input.focus();
 }
 
-// ── Cartes de synthèse ─────────────────────────────────────────────────
+// ── Reste libre ────────────────────────────────────────────────────────
+
+function resteLibre(s) {
+  let sousTexte;
+  if (s.disponible <= 0 && s.resteLibre >= 0) sousTexte = 'Renseigne les soldes et les salaires';
+  else if (s.resteLibre < 0) sousTexte = '⚠ Le prévu dépasse ce qui est disponible';
+  else sousTexte = 'Ce qui restera à la fin du mois';
+
+  // Tant qu'un membre n'a pas rempli sa part, son solde manque : la prévision est partielle
+  const enAttente = etat.membres.filter((m) => !etat.donnees.membresMois.find((x) => x.membre_id === m.id)?.renseigne);
+  if (enAttente.length && s.resteLibre >= 0) {
+    sousTexte = `Prévision partielle : ${enAttente.map((m) => m.prenom).join(' et ')} n'a pas encore rempli sa part`;
+  }
+  return el('div', {class: `carte-stat carte-reste ${s.resteLibre < 0 ? 'negatif' : 'positif'}`},
+    el('div', {class: 'etiquette-stat'}, 'Reste libre'),
+    el('div', {class: 'valeur-stat montant'}, formatEUR(s.resteLibre)),
+    el('div', {class: 'sous-stat'}, sousTexte));
+}
+
+// ── Cartes de détail (repliées) ────────────────────────────────────────
 
 function cartes(s) {
   const modifiable = estMoisCourant();
@@ -134,17 +175,6 @@ function cartes(s) {
     el('div', {class: 'valeur-stat montant'}, formatEUR(valeur)),
     barre,
     sous.map((t) => el('div', {class: 'sous-stat'}, t)));
-
-  let sousTexte;
-  if (s.disponible <= 0 && s.resteLibre >= 0) sousTexte = 'Renseigne les soldes et les salaires';
-  else if (s.resteLibre < 0) sousTexte = '⚠ Le prévu dépasse ce qui est disponible';
-  else sousTexte = `${formatPct(s.pctResteLibre)} du disponible · prévision de fin de mois`;
-
-  // Tant qu'un membre n'a pas rempli sa part, son solde manque : la prévision est partielle
-  const enAttente = etat.membres.filter((m) => !etat.donnees.membresMois.find((x) => x.membre_id === m.id)?.renseigne);
-  if (enAttente.length && s.resteLibre >= 0) {
-    sousTexte = `Prévision partielle : ${enAttente.map((m) => m.prenom).join(' et ')} n'a pas encore rempli sa part`;
-  }
 
   const detail = (libelle, valeur) => el('div', {class: 'detail-stat'}, el('span', {}, libelle),
     el('span', {class: 'montant'}, formatEUR(valeur)));
@@ -165,10 +195,6 @@ function cartes(s) {
   if (!sousBudgets.length) sousBudgets.push(sousPct(s.budgetsAVenir));
 
   return el('div', {class: 'grille-stats'},
-    el('div', {class: `carte-stat large ${s.resteLibre < 0 ? 'negatif' : 'positif'}`},
-      el('div', {class: 'etiquette-stat'}, 'Reste libre'),
-      el('div', {class: 'valeur-stat montant'}, formatEUR(s.resteLibre)),
-      el('div', {class: 'sous-stat'}, sousTexte)),
     modifiable
       ? el('button', {class: 'carte-stat large', type: 'button', style: {textAlign: 'left', font: 'inherit'},
           'aria-label': `Disponible ${formatEUR(s.disponible)}, gérer les autres revenus`, onclick: ouvrirRevenus}, disponible)
@@ -224,17 +250,14 @@ function categories() {
 
   const lignes = d.categories
     .filter((c) => d.budgets.some((b) => b.categorie_id === c.id) || depenses.has(c.id))
-    .map((c) => ({c, budget: budgetDe(c.id), depense: depenses.get(c.id)?.total ?? 0, parMembre: depenses.get(c.id)?.parMembre ?? {}}));
+    .map((c) => ({c, budget: budgetDe(c.id), depense: depenses.get(c.id)?.total ?? 0}));
   const suivies = lignes.filter((l) => l.budget > 0 || l.depense > 0);
   const aZero = lignes.filter((l) => l.budget === 0 && l.depense === 0);
 
-  const ligne = ({c, budget, depense, parMembre}) => {
+  // Une ligne par catégorie : nom, dépensé / budget, jauge colorée ; le détail par personne est dans Dépenses
+  const ligne = ({c, budget, depense}) => {
     const niveau = niveauBudget(budget, depense);
     const largeur = budget > 0 ? Math.min(100, (depense / budget) * 100) : (depense > 0 ? 100 : 0);
-    const detail = etat.membres
-      .filter((m) => parMembre[m.id])
-      .map((m) => `${m.prenom} ${formatEUR(parMembre[m.id])}`)
-      .join(' · ');
     const libelleBudget = `${formatEUR(depense)} / ${formatEUR(budget)}`;
     return el('li', {class: `ligne bord-niveau-${niveau}`, style: {display: 'block'}},
       el('div', {style: {display: 'flex', alignItems: 'center', gap: '8px'}},
@@ -247,35 +270,15 @@ function categories() {
           : el('span', {class: 'montant attenue'}, libelleBudget)),
       el('div', {class: `jauge niveau-${niveau}`, role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': String(budget),
         'aria-valuenow': String(depense), 'aria-label': `${c.nom} : ${libelleBudget}`},
-      el('span', {style: {width: `${largeur}%`}})),
-      el('div', {style: {display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.8rem'}},
-        el('span', {class: 'attenue'}, detail || 'Aucune dépense'),
-        el('span', {class: `montant niveau-texte-${niveau}`}, `Reste ${formatEUR(budget - depense, {signe: true})}`)));
+      el('span', {style: {width: `${largeur}%`}})));
   };
 
   return el('div', {},
-    suivies.length ? resumeCategories(resumeBudgets(suivies)) : null,
     suivies.length ? el('ul', {class: 'liste'}, suivies.map(ligne)) : el('p', {class: 'vide-liste'}, 'Aucun budget ce mois-ci.'),
     aZero.length
-      ? el('details', {class: 'repliable'},
-          el('summary', {}, `Catégories sans budget (${aZero.length})`),
-          el('ul', {class: 'liste'}, aZero.map(ligne)))
+      ? repliable('accueil-sans-budget', `Catégories sans budget (${aZero.length})`, el('ul', {class: 'liste'}, aZero.map(ligne)))
       : null,
     courant ? el('button', {class: 'btn-texte', type: 'button', onclick: ouvrirCategories}, 'Gérer les catégories') : null);
-}
-
-// Vue d'ensemble des budgets : dépensé sur prévu, reste, et nombre de catégories par couleur
-function resumeCategories(r) {
-  const compte = (n, niveau, texte) => (n ? el('span', {class: `pastille petite niveau-${niveau}`}, texte) : null);
-  return el('div', {class: 'carte resume-budgets'},
-    el('div', {class: 'resume-budgets-ligne'},
-      el('span', {}, el('strong', {class: 'montant'}, formatEUR(r.depense)), ` dépensés sur ${formatEUR(r.prevu)} prévus`),
-      el('span', {class: `montant niveau-texte-${r.niveau}`}, `Reste ${formatEUR(r.reste, {signe: true})}`)),
-    jauge(r, 'Tous les budgets'),
-    el('div', {class: 'pastilles'},
-      compte(r.ok, 'ok', `✓ ${r.ok} dans le budget`),
-      compte(r.alerte, 'alerte', `${r.alerte} bientôt ${r.alerte > 1 ? 'atteints' : 'atteint'}`),
-      compte(r.depasse, 'depasse', `${r.depasse} ${r.depasse > 1 ? 'dépassés' : 'dépassé'}`)));
 }
 
 function editerBudget(categorie, actuel) {
@@ -415,10 +418,11 @@ function blocFoyer() {
 }
 
 function piedDePage() {
-  return el('div', {class: 'carte', style: {marginTop: '16px'}},
+  const seul = !etat.membres.some((m) => m.id !== etat.moi.id);
+  return repliable('accueil-foyer', 'Foyer et profil', el('div', {class: 'carte'},
     blocFoyer(),
     el('div', {style: {display: 'flex', justifyContent: 'space-between', gap: '8px'}},
       el('button', {class: 'btn-texte', type: 'button', onclick: ouvrirProfil, style: {paddingLeft: 0}}, 'Mon profil'),
       el('button', {class: 'btn-texte', type: 'button', onclick: seDeconnecter}, 'Se déconnecter')),
-    el('p', {class: 'version-app'}, `Version ${VERSION === '__VERSION__' ? 'locale' : VERSION}`));
+    el('p', {class: 'version-app'}, `Version ${VERSION === '__VERSION__' ? 'locale' : VERSION}`)), {ouvert: seul});
 }

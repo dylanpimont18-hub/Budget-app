@@ -3,7 +3,7 @@ import {creerObjectif, modifierObjectif, archiverObjectif, ajouterVersement, sup
 import {etat, recharger, estMoisCourant} from '../etat.js';
 import {formatEUR, libelleMois, nbMois, decalerMois, effortMensuel, cibleDepuisMensuel, suiviObjectif, syntheseMois,
   projectionObjectif, faisabiliteObjectif} from '../calc.js';
-import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher} from '../ui.js';
+import {el, ajouter, ouvrirFeuille, toast, champMontant, caseACocher, repliable} from '../ui.js';
 
 const ICONES = ['🏖️', '🚗', '🏠', '🎁', '🎓', '💍', '🛟', '🎯'];
 const STATUTS = {avance: 'En avance', ajour: 'À jour', retard: 'En retard', atteint: 'Atteint', echu: 'Échu'};
@@ -61,22 +61,21 @@ export function rendreObjectifs(conteneur) {
   const objectifs = etat.donnees.objectifs;
   const actifs = objectifs.filter((o) => !estArchive(o));
   const archives = objectifs.filter(estArchive);
-  const resteLibre = resteLibreDuMois();
 
   ajouter(conteneur, [
     el('div', {class: 'entete-vue'}, el('h1', {}, 'Objectifs')),
     actifs.length
-      ? el('div', {class: 'grille-ordinateur'}, actifs.map((o) => carteObjectif(o, resteLibre)))
+      ? el('div', {class: 'grille-ordinateur'}, actifs.map((o) => carteObjectif(o)))
       : el('p', {class: 'vide-liste'}, 'Aucun objectif en cours. Crées-en un pour suivre ton épargne.'),
     el('button', {class: 'btn-secondaire', type: 'button', onclick: () => ouvrirFormulaire(null)}, '+ Nouvel objectif'),
     archives.length
-      ? el('details', {class: 'repliable', style: {marginTop: '16px'}},
-          el('summary', {}, `Archivés (${archives.length})`),
-          el('div', {class: 'grille-ordinateur'}, archives.map((o) => carteObjectif(o))))
+      ? repliable('objectifs-archives', `Archivés (${archives.length})`,
+          el('div', {class: 'grille-ordinateur'}, archives.map((o) => carteObjectif(o))), {classe: 'archives-objectifs'})
       : null]);
 }
 
-function carteObjectif(o, resteLibre = null) {
+// Carte légère : nom, statut, jauge ; l'estimation (réalisable ?) est dans le détail
+function carteObjectif(o) {
   const s = suivi(o);
   const statut = statutAffiche(s);
   const cible = Number(o.cible);
@@ -94,8 +93,7 @@ function carteObjectif(o, resteLibre = null) {
     el('span', {class: 'montant'}, `${formatEUR(s.verse)} / ${formatEUR(cible)}`),
     el('span', {}, s.echu || statut === 'atteint'
       ? `Fin ${libelleMois(o.fin)}`
-      : `${s.moisRestants} mois restant${s.moisRestants > 1 ? 's' : ''} · ${formatEUR(s.effortRecalcule)}/mois`)),
-  estArchive(o) ? null : estimation(o, resteLibre));
+      : `${s.moisRestants} mois restant${s.moisRestants > 1 ? 's' : ''} · ${formatEUR(s.effortRecalcule)}/mois`)));
 }
 
 // ── Création / modification ────────────────────────────────────────────
