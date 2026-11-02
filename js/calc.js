@@ -209,7 +209,8 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
   const objectifs = somme(versements.map((v) => v.montant));
   const objectifsAVenir = somme(versements.filter((v) => !(avecSolde && v.dans_solde)).map((v) => v.montant));
   const disponible = arrondi(comptes + salairesARecevoir + revenusARecevoir);
-  const resteLibre = arrondi(disponible - chargesAPrelever - depensesHorsSolde - objectifsAVenir);
+  // L'épargne (versements aux objectifs) n'est pas retirée du reste libre : elle se suit dans l'onglet Objectifs
+  const resteLibre = arrondi(disponible - chargesAPrelever - depensesHorsSolde);
   return {
     comptes, salaires, salairesARecevoir, autresRevenus, revenusARecevoir, disponible,
     chargesFixes, chargesAPrelever,

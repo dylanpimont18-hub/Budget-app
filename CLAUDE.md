@@ -57,8 +57,9 @@ Database changes: add a numbered file in `supabase/migrations/`, apply it with t
   starting point; add only what is not in it yet (salary unless `salaire_dans_solde`, other income unless
   `revenus_mois.dans_solde`), subtract only what has not left yet (charges unless `recurrentes_mois.dans_solde`,
   the expenses actually made — not the budgets — minus the payer's expenses already in the balance (dated before
-  `solde_le`, or that day and created before `solde_a`), goal transfers unless `versements.dans_solde`). Budgets are
-  a guide only (gauges); `budgetsAVenir` (max(budget, spent)) is kept for the detail. `salaire_recu` is display only.
+  `solde_le`, or that day and created before `solde_a`)). Goal transfers are not subtracted from `resteLibre` (they
+  are followed in Objectifs; « Par personne » still subtracts them unless `versements.dans_solde`). Budgets are a guide
+  only (gauges); `budgetsAVenir` (max(budget, spent)) is kept for the detail. `salaire_recu` is display only.
 - A month starts when it is opened, not on the 1st: its period (`periodeMois` in `calc.js`) runs from its earliest
   `solde_le` (at the latest the 1st) to the start of the next opened month, and expenses are filed by date in it
   (`chargerMois`, `chargerPlage`). The current month (`moisActif`) is the last opened one; the next is offered from the

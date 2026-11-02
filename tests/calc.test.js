@@ -66,8 +66,8 @@ test('syntheseMois sans solde : salaires + revenus − charges − dépenses −
   assert.equal(s.chargesAPrelever, 780.25);
   assert.equal(s.budgetsAVenir, 1100);
   assert.equal(s.depensesHorsSolde, 0);
-  assert.equal(s.resteLibre, 3119.75);      // les budgets ne sont pas retirés : seules les dépenses faites
-  assert.equal(s.pctResteLibre, 77.99);
+  assert.equal(s.resteLibre, 3219.75);      // ni les budgets ni l'épargne ne sont retirés
+  assert.equal(s.pctResteLibre, 80.49);
   assert.equal(syntheseMois({recurrentes: [{montant: 10}]}).pctResteLibre, null);
 });
 test("syntheseMois avec soldes : rien n'est compté deux fois", () => {
@@ -97,7 +97,7 @@ test("syntheseMois avec soldes : rien n'est compté deux fois", () => {
   assert.equal(s.budgetsAVenir, 740);
   assert.equal(s.depensesTotal, 530);
   assert.equal(s.depensesHorsSolde, 90);     // 60 + 30 : les 440 déjà déduites sont dans les soldes
-  assert.equal(s.resteLibre, 3279.75);       // 3550 − 80,25 − 90 − 100
+  assert.equal(s.resteLibre, 3379.75);       // 3550 − 80,25 − 90
 });
 test('bilanMois', () => {
   const b = bilanMois({budgets: [{categorie_id: 'c', montant: 750}, {categorie_id: 't', montant: 350}],
@@ -394,7 +394,7 @@ test('syntheseMois : versement déjà fait avant le solde', () => {
     versements: [{montant: 100, dans_solde: true}, {montant: 50, dans_solde: false}]});
   assert.equal(s.objectifs, 150);
   assert.equal(s.objectifsAVenir, 50);
-  assert.equal(s.resteLibre, 950);
+  assert.equal(s.resteLibre, 1000);          // l'épargne ne compte pas dans le reste libre
   // Sans solde, la case est ignorée
   assert.equal(syntheseMois({versements: [{montant: 100, dans_solde: true}]}).objectifsAVenir, 100);
 });

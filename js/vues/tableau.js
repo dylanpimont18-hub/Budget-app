@@ -152,7 +152,7 @@ function resteLibre(s) {
   let sousTexte;
   if (s.disponible <= 0 && s.resteLibre >= 0) sousTexte = 'Renseigne les soldes et les salaires';
   else if (s.resteLibre < 0) sousTexte = '⚠ Les charges et les dépenses dépassent ce qui est disponible';
-  else sousTexte = 'Après les charges, les dépenses faites et l\'épargne prévue';
+  else sousTexte = 'Après les charges et les dépenses faites';
 
   // Tant qu'un membre n'a pas rempli sa part, son solde manque : la prévision est partielle
   const enAttente = etat.membres.filter((m) => !etat.donnees.membresMois.find((x) => x.membre_id === m.id)?.renseigne);
@@ -202,9 +202,7 @@ function cartes(s) {
       : el('div', {class: 'carte-stat large'}, disponible),
     carte('Charges à prélever', s.chargesAPrelever, sousCharges,
       etat.donnees.recurrentes.length ? repartitionCharges(etatRecurrentes(etat.donnees.recurrentes), {legende: false}) : null),
-    carte('Dépenses', s.depensesHorsSolde, sousDepenses, jaugeBudgets()),
-    carte('Objectifs', s.objectifsAVenir, s.objectifsAVenir !== s.objectifs
-      ? [`sur ${formatEUR(s.objectifs)}, le reste déjà viré`] : [sousPct(s.objectifsAVenir)]));
+    carte('Dépenses', s.depensesHorsSolde, sousDepenses, jaugeBudgets()));
 }
 
 // Dépensé / prévu sur l'ensemble des budgets, coloré comme les jauges des catégories
@@ -330,7 +328,6 @@ function graphiques(s, {prevision}) {
   const segments = [
     {nom: 'Charges à prélever', montant: s.chargesAPrelever, couleur: COULEURS[0]},
     {nom: 'Dépenses', montant: s.depensesHorsSolde, couleur: COULEURS[2]},
-    {nom: 'Objectifs', montant: Math.max(0, s.objectifsAVenir), couleur: COULEURS[1]},
     {nom: 'Reste libre', montant: Math.max(0, s.resteLibre), couleur: COULEURS[4]},
   ];
   const totalBarre = segments.reduce((t, x) => t + x.montant, 0);
