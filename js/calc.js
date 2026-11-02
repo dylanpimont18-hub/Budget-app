@@ -188,7 +188,7 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
   const chargesFixes = somme(recurrentes.map((r) => r.montant));
   const chargesAPrelever = somme(recurrentes.filter((r) => !(avecSolde && r.dans_solde)).map((r) => r.montant));
 
-  // Par catégorie : on prévoit le plus grand du budget et du dépensé, moins ce qui est déjà sorti du compte
+  // Par catégorie : le plus grand du budget et du dépensé, moins ce qui est déjà sorti du compte (prévision, pour le détail)
   const parCategorie = new Map();
   const ligne = (id) => parCategorie.get(id) ?? parCategorie.set(id, {budget: 0, depense: 0, deduit: 0}).get(id);
   for (const b of budgets) ligne(b.categorie_id).budget += Number(b.montant) || 0;
@@ -202,15 +202,19 @@ export function syntheseMois({membres = [], revenus = [], recurrentes = [], budg
   const budgetsPrevus = somme(lignes.map((l) => Math.max(l.budget, l.depense)));
   const depensesDeduites = somme(lignes.map((l) => l.deduit));
   const budgetsAVenir = arrondi(budgetsPrevus - depensesDeduites);
+  // Le reste libre compte les dépenses réellement faites, pas les budgets : seules celles pas encore dans un solde
+  const depensesTotal = arrondi(somme(depenses.map((d) => d.montant)));
+  const depensesHorsSolde = arrondi(depensesTotal - depensesDeduites);
 
   const objectifs = somme(versements.map((v) => v.montant));
   const objectifsAVenir = somme(versements.filter((v) => !(avecSolde && v.dans_solde)).map((v) => v.montant));
   const disponible = arrondi(comptes + salairesARecevoir + revenusARecevoir);
-  const resteLibre = arrondi(disponible - chargesAPrelever - budgetsAVenir - objectifsAVenir);
+  // L'épargne (versements aux objectifs) n'est pas retirée du reste libre : elle se suit dans l'onglet Objectifs
+  const resteLibre = arrondi(disponible - chargesAPrelever - depensesHorsSolde);
   return {
     comptes, salaires, salairesARecevoir, autresRevenus, revenusARecevoir, disponible,
     chargesFixes, chargesAPrelever,
-    budgets: budgetsTotal, budgetsPrevus, depensesDeduites, budgetsAVenir,
+    budgets: budgetsTotal, budgetsPrevus, depensesDeduites, budgetsAVenir, depensesTotal, depensesHorsSolde,
     objectifs, objectifsAVenir, resteLibre,
     pctResteLibre: disponible > 0 ? arrondi((resteLibre / disponible) * 100) : null,
   };

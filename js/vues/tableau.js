@@ -151,8 +151,8 @@ function confirmerSalaire(membre, mm) {
 function resteLibre(s) {
   let sousTexte;
   if (s.disponible <= 0 && s.resteLibre >= 0) sousTexte = 'Renseigne les soldes et les salaires';
-  else if (s.resteLibre < 0) sousTexte = '⚠ Le prévu dépasse ce qui est disponible';
-  else sousTexte = 'Ce qui restera à la fin du mois';
+  else if (s.resteLibre < 0) sousTexte = '⚠ Les charges et les dépenses dépassent ce qui est disponible';
+  else sousTexte = 'Après les charges et les dépenses faites';
 
   // Tant qu'un membre n'a pas rempli sa part, son solde manque : la prévision est partielle
   const enAttente = etat.membres.filter((m) => !etat.donnees.membresMois.find((x) => x.membre_id === m.id)?.renseigne);
@@ -189,10 +189,11 @@ function cartes(s) {
 
   const sousCharges = s.chargesAPrelever !== s.chargesFixes
     ? [`sur ${formatEUR(s.chargesFixes)}, le reste déjà prélevé`] : [sousPct(s.chargesAPrelever)];
-  const sousBudgets = [];
-  if (s.depensesDeduites > 0) sousBudgets.push(`${formatEUR(s.depensesDeduites)} déjà payés avant le solde`);
-  if (s.budgetsPrevus > s.budgets) sousBudgets.push(`dont ${formatEUR(s.budgetsPrevus - s.budgets)} de dépassement`);
-  if (!sousBudgets.length) sousBudgets.push(sousPct(s.budgetsAVenir));
+  // Les dépenses réellement faites (pas les budgets) ; celles d'avant le solde y sont déjà
+  const sousDepenses = [];
+  if (s.depensesDeduites > 0) sousDepenses.push(`sur ${formatEUR(s.depensesTotal)}, le reste déjà dans le solde`);
+  if (s.budgets > 0) sousDepenses.push(`budgets : ${formatEUR(s.budgets)}`);
+  if (!sousDepenses.length) sousDepenses.push(sousPct(s.depensesHorsSolde));
 
   return el('div', {class: 'grille-stats'},
     modifiable
@@ -201,9 +202,7 @@ function cartes(s) {
       : el('div', {class: 'carte-stat large'}, disponible),
     carte('Charges à prélever', s.chargesAPrelever, sousCharges,
       etat.donnees.recurrentes.length ? repartitionCharges(etatRecurrentes(etat.donnees.recurrentes), {legende: false}) : null),
-    carte('Budgets à venir', s.budgetsAVenir, sousBudgets, jaugeBudgets()),
-    carte('Objectifs', s.objectifsAVenir, s.objectifsAVenir !== s.objectifs
-      ? [`sur ${formatEUR(s.objectifs)}, le reste déjà viré`] : [sousPct(s.objectifsAVenir)]));
+    carte('Dépenses', s.depensesHorsSolde, sousDepenses, jaugeBudgets()));
 }
 
 // Dépensé / prévu sur l'ensemble des budgets, coloré comme les jauges des catégories
@@ -328,8 +327,7 @@ function graphiques(s, {prevision}) {
 
   const segments = [
     {nom: 'Charges à prélever', montant: s.chargesAPrelever, couleur: COULEURS[0]},
-    {nom: 'Budgets à venir', montant: s.budgetsAVenir, couleur: COULEURS[2]},
-    {nom: 'Objectifs', montant: Math.max(0, s.objectifsAVenir), couleur: COULEURS[1]},
+    {nom: 'Dépenses', montant: s.depensesHorsSolde, couleur: COULEURS[2]},
     {nom: 'Reste libre', montant: Math.max(0, s.resteLibre), couleur: COULEURS[4]},
   ];
   const totalBarre = segments.reduce((t, x) => t + x.montant, 0);

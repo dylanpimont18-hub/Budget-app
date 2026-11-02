@@ -57,7 +57,7 @@ test('resumeBudgets compte les catégories par niveau', () => {
   assert.deepEqual(r, {prevu: 250, depense: 175.1, reste: 74.9, niveau: 'ok', ok: 1, alerte: 1, depasse: 1});
   assert.equal(resumeBudgets([]).niveau, 'vide');
 });
-test('syntheseMois sans solde : salaires + revenus − charges − budgets − objectifs', () => {
+test('syntheseMois sans solde : salaires + revenus − charges − dépenses − objectifs', () => {
   const s = syntheseMois({membres: [{salaire: 1800, solde: null}, {salaire: 2100, solde: null}],
     revenus: [{montant: 100, dans_solde: true}], recurrentes: [{montant: 700, dans_solde: true}, {montant: 80.25}],
     budgets: [{categorie_id: 'c', montant: 750}, {categorie_id: 't', montant: 350}], versements: [{montant: 100}]});
@@ -65,8 +65,9 @@ test('syntheseMois sans solde : salaires + revenus − charges − budgets − o
   assert.equal(s.disponible, 4000);
   assert.equal(s.chargesAPrelever, 780.25);
   assert.equal(s.budgetsAVenir, 1100);
-  assert.equal(s.resteLibre, 2019.75);
-  assert.equal(s.pctResteLibre, 50.49);
+  assert.equal(s.depensesHorsSolde, 0);
+  assert.equal(s.resteLibre, 3219.75);      // ni les budgets ni l'épargne ne sont retirés
+  assert.equal(s.pctResteLibre, 80.49);
   assert.equal(syntheseMois({recurrentes: [{montant: 10}]}).pctResteLibre, null);
 });
 test("syntheseMois avec soldes : rien n'est compté deux fois", () => {
@@ -94,7 +95,9 @@ test("syntheseMois avec soldes : rien n'est compté deux fois", () => {
   assert.equal(s.budgetsPrevus, 1180);       // 750 + max(350, 400) + 30
   assert.equal(s.depensesDeduites, 440);
   assert.equal(s.budgetsAVenir, 740);
-  assert.equal(s.resteLibre, 2629.75);       // 3550 − 80,25 − 740 − 100
+  assert.equal(s.depensesTotal, 530);
+  assert.equal(s.depensesHorsSolde, 90);     // 60 + 30 : les 440 déjà déduites sont dans les soldes
+  assert.equal(s.resteLibre, 3379.75);       // 3550 − 80,25 − 90
 });
 test('bilanMois', () => {
   const b = bilanMois({budgets: [{categorie_id: 'c', montant: 750}, {categorie_id: 't', montant: 350}],
@@ -382,6 +385,7 @@ test('syntheseMois : dépense du jour du solde, enregistrée avant ou après lui
   const s = syntheseMois({membres, budgets, depenses});
   assert.equal(s.depensesDeduites, 80);
   assert.equal(s.budgetsAVenir, 420);
+  assert.equal(s.depensesHorsSolde, 20);
   // Solde saisi avant cette évolution (sans solde_a) : la dépense du jour n'est pas considérée comme déduite
   assert.equal(syntheseMois({membres: [{...membres[0], solde_a: null}], budgets, depenses}).depensesDeduites, 0);
 });
@@ -390,7 +394,7 @@ test('syntheseMois : versement déjà fait avant le solde', () => {
     versements: [{montant: 100, dans_solde: true}, {montant: 50, dans_solde: false}]});
   assert.equal(s.objectifs, 150);
   assert.equal(s.objectifsAVenir, 50);
-  assert.equal(s.resteLibre, 950);
+  assert.equal(s.resteLibre, 1000);          // l'épargne ne compte pas dans le reste libre
   // Sans solde, la case est ignorée
   assert.equal(syntheseMois({versements: [{montant: 100, dans_solde: true}]}).objectifsAVenir, 100);
 });

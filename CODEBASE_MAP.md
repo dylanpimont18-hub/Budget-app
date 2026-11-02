@@ -52,7 +52,7 @@ Fonctions pures de calcul, sans DOM ni réseau.
 - niveauBudget(budget, depense) — vide / ok / alerte / dépassé
 - statutRecurrente(r) / etatRecurrentes(recurrentes) — charge déjà prélevée, à prélever ou à confirmer ; totaux par statut
 - resumeBudgets(lignes) — prévu, dépensé, reste, niveau global et nombre de catégories par niveau
-- syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements}) — disponible, à venir, reste libre, sans doublon (dépense du jour du solde selon solde_a, versements déjà faits)
+- syntheseMois({membres, revenus, recurrentes, budgets, depenses, versements}) — disponible, à venir, reste libre (dépenses réelles, ni budgets ni épargne), sans doublon (dépense du jour du solde selon solde_a, versements déjà faits)
 - colonnesMembres({membres, ids, revenus, recurrentes, depenses, versements}) — reste de chacun : solde, salaire et revenus à venir (communs partagés), part des communes (compte joint), charges perso, dépenses payées, objectifs
 - virementCommun({ids, recurrentes, revenus}) — à virer chacun sur le compte commun : (charges communes − revenus communs) / n
 - bilanMois({budgets, depenses}) — prévu, dépensé, dépassements d'un mois
