@@ -36,6 +36,15 @@ export function ajouter(parent, enfants) {
   }
 }
 
+// Section repliée par défaut (sauf ouvert = true au premier affichage) ; l'état ouvert / fermé survit aux re-rendus
+// (chaque événement temps réel reconstruit l'onglet), retenu par sa clé.
+const repliables = new Map();
+export function repliable(cle, resume, contenu, {ouvert = false, classe = ''} = {}) {
+  return el('details', {class: `repliable ${classe}`.trim(), open: repliables.get(cle) ?? ouvert,
+    ontoggle: (e) => repliables.set(cle, e.currentTarget.open)},
+  el('summary', {}, resume), contenu);
+}
+
 // Disposition ordinateur (même seuil que la media query de style.css)
 const requeteOrdinateur = globalThis.matchMedia?.('(min-width: 1024px)');
 

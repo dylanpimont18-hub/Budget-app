@@ -7,7 +7,7 @@ Tests : `npm test` (logique pure) et `supabase/tests/rls_et_rpc.sql` (base, à l
 Guide pour Claude Code : architecture, commandes, conventions.
 
 ## index.html
-Coquille : CSP (seuls le site, Supabase et Google Fonts), `js/vendor/supabase.js` (supabase-js 2.45.4, UMD), bandeau `#mise-a-jour`, `#vue`, barre d'onglets `#onglets` (titre et entrée Rapports visibles sur ordinateur seulement), bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
+Coquille : CSP (seuls le site, Supabase et Google Fonts), `js/vendor/supabase.js` (supabase-js 2.45.4, UMD), bandeau `#mise-a-jour`, `#vue`, barre d'onglets `#onglets` : Accueil, Dépenses, Objectifs (titre et entrée Rapports visibles sur ordinateur seulement), bouton `#btn-ajout-rapide`, conteneur `#feuilles`, bandeau `#hors-ligne`.
 
 ## style.css
 Jetons « atelier d'ébéniste » (`:root` : lichen, noyer, chêne, mousse, miel, cèdre) et composants : cartes, jauges, listes, champs, boutons, onglets, feuille, swipe, graphiques, bandeaux.
@@ -122,6 +122,7 @@ Helpers DOM (jamais d'innerHTML pour des données utilisateur).
 - el(tag, attrs, ...enfants) — crée un élément
 - estOrdinateur() / surChangementOrdinateur(cb) — seuil 1024 px, hors impression
 - ajouter(parent, enfants) — ajoute en aplatissant, ignore null
+- repliable(cle, resume, contenu, {ouvert, classe}) — section repliée dont l'état survit aux re-rendus
 - ouvrirFeuille(contenu, {titre}) — feuille du bas, fenêtre sur ordinateur
 - telecharger(nom, contenu, type) — télécharge un fichier généré
 - toast(message, {type}) — message temporaire
@@ -132,7 +133,7 @@ Helpers DOM (jamais d'innerHTML pour des données utilisateur).
 
 ## js/app.js
 Démarrage et routage : connexion → foyer → ouverture du mois → onglets ; redémarre si le mois a changé.
-`body[data-onglet]` = onglet actif ; sous 1024 px, Rapports bascule sur Budget ; le focus survit aux re-rendus.
+`body[data-onglet]` = onglet actif ; « recurrentes » est un écran sans onglet (Accueil reste allumé) ; sous 1024 px, Rapports bascule sur l'Accueil ; le focus survit aux re-rendus.
 - afficherOnglet(nom, options) — affiche un onglet
 - seDeconnecter() — déconnexion avec message d'erreur
 - ouvrirMoisSuivant() — ouvre le mois qui suit le mois en cours (paye reçue : il commence à ce solde)
@@ -149,7 +150,7 @@ Ouverture du mois : sa part (salaire, solde), celle de l'autre en option, revenu
 - rendreOuverture(conteneur, {apres, annuler}) — formulaire d'ouverture du mois
 
 ## js/vues/recurrentes.js
-Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue par swipe (montant modifiable, déjà prélevée).
+Écran Charges fixes (ouvert depuis l'Accueil, lien « ‹ Accueil ») : charges communes / perso, variables à confirmer ; revue par swipe (montant modifiable, déjà prélevée).
 - rendreRecurrentes(conteneur, {revue}) — liste groupée (mois passé : corrections de ce mois seul) ou revue par swipe
   (saisie gardée si le temps réel redessine, « Annuler » rétablit aussi montant et « déjà prélevée »)
 - ouvrirConfirmation(ligne) — saisir le montant d'une charge variable
@@ -158,7 +159,7 @@ Onglet Récurrentes : charges communes / perso, variables à confirmer ; revue p
 Onglet Dépenses, historique mensuel, formulaire de dépense partagé ; sur ordinateur, tableau + panneau de saisie et budgets.
 - formulaireDepense({depense, onValider, prefixe}) — saisie / modification d'une dépense
 - selecteurMois() — navigation ‹ mois › entre mois ouverts, période sous le titre (« depuis le 27 oct. »)
-- rendreDepenses(conteneur) — « Par personne » en tête, puis journal par date ou catégorie (tableau sur ordinateur)
+- rendreDepenses(conteneur) — « Par personne » replié en tête, puis journal par date ou catégorie (tableau sur ordinateur)
 - categorieDe(id) / aujourdhui() — utilitaires partagés
 
 ## js/vues/ajout-rapide.js
@@ -170,9 +171,12 @@ Colonnes « Par personne » de l'onglet Dépenses (calc.colonnesMembres) : avata
 - blocParPersonne() — carte « compte commun » (virement de chacun), puis une carte par membre ; toucher une carte ouvre sa part du mois
 
 ## js/vues/tableau.js
-Onglet Budget : disponible et reste libre, bilan des mois passés, budgets, graphiques SVG.
+Onglet Accueil : reste libre (bilan pour un mois passé), ligne « Charges fixes », budgets (nom, dépensé / prévu, jauge).
+Repliés : « Voir le détail » (disponible, charges, budgets à venir, objectifs, graphiques SVG) et « Foyer et profil »
+(ouvert tant que le foyer attend son 2e membre). Au plus deux rappels visibles, les autres repliés.
 Exporte `COULEURS` et `GRIS_AUTRES` (couleurs des graphiques, réutilisées par les rapports).
-- rendreTableau(conteneur) — tableau de bord du mois affiché
+- rendreTableau(conteneur) — accueil du mois affiché
+- ligneCharges() — total des charges fixes et ce qui reste à confirmer / prélever, ouvre leur écran
 - bandeaux() / confirmerSalaire(membre, mm) — part à remplir, charge à confirmer, salaire reçu ?, ouvrir le mois suivant (dès le 20, ou une fois le mois passé)
 - bilan() — bilan d'un mois passé (remplace la prévision)
 - blocFoyer() — code d'invitation (tant que le foyer attend son 2e membre), changer le code, retirer un membre
@@ -184,7 +188,7 @@ Part d'un membre pour un mois (salaire déjà sur le compte ?, montant, solde), 
 - de(prenom) — réexporté depuis calc.js
 
 ## js/vues/reglages.js
-Feuilles ouvertes depuis l'onglet Budget.
+Feuilles ouvertes depuis l'Accueil.
 - ouvrirRevenus() — autres revenus du mois (communs ou perso)
 - formulaireRevenu({revenu, onValider, libelleBouton}) — formulaire partagé avec le bouton +
 - ouvrirCategories() — créer, renommer, désactiver
@@ -192,7 +196,7 @@ Feuilles ouvertes depuis l'onglet Budget.
 
 ## js/vues/objectifs.js
 Onglet Objectifs : suivi, versements / retraits, archives.
-- rendreObjectifs(conteneur) — liste, création, détail
+- rendreObjectifs(conteneur) — liste (cartes légères ; l'estimation « réalisable ? » est dans le détail), création, détail
 - estArchive(objectif) — archivé, atteint ou échu
 
 ## js/vues/rapports.js

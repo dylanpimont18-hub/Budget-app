@@ -203,6 +203,14 @@ button { cursor: pointer; }
 .carte-stat.negatif .valeur-stat { color: #F2A68A; }
 .carte-stat.negatif { box-shadow: inset 4px 0 0 var(--cedre); }
 
+/* Accueil : le reste libre seul, puis une ligne par écran (charges fixes) ; le détail est replié */
+.carte-reste { margin-bottom: 12px; }
+.ligne .chevron { color: var(--attenue); font-size: 1.3rem; flex-shrink: 0; }
+details.detail-accueil { margin-top: 4px; }
+details.detail-accueil > summary { margin-bottom: 4px; }
+.btn-retour { padding-left: 0; margin-bottom: 4px; }
+details.archives-objectifs { margin-top: 16px; }
+
 /* ── Jauges ──────────────────────────────────────────────────────────── */
 
 .jauge {
@@ -470,7 +478,7 @@ button.ligne:active { background: var(--sable); }
     bottom: 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     background: var(--noyer);
     padding-bottom: var(--bas-securite);
 }
@@ -723,6 +731,14 @@ details.repliable > summary {
     font-weight: 600;
     cursor: pointer;
 }
+details.repliable > summary::after {
+    content: "›";
+    margin-left: 8px;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: transform 0.15s;
+}
+details.repliable[open] > summary::after { transform: rotate(90deg); }
 
 .apercu-calcul {
     background: var(--sable);

@@ -48,8 +48,10 @@ export function afficherOnglet(nom, options) {
   changerOnglet(nom);
   nav.hidden = false;
   btnAjout.hidden = false;
+  // Les charges fixes n'ont plus d'onglet : elles s'ouvrent depuis l'Accueil, qui reste allumé
+  const entree = nom === 'recurrentes' ? 'tableau' : nom;
   for (const b of nav.querySelectorAll('button')) {
-    b.setAttribute('aria-current', b.dataset.onglet === nom ? 'page' : 'false');
+    b.setAttribute('aria-current', b.dataset.onglet === entree ? 'page' : 'false');
   }
   rendreOngletActif(options);
   window.scrollTo(0, 0);
